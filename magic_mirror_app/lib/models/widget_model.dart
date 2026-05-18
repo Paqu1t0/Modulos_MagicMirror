@@ -6,6 +6,9 @@ class WidgetModel {
   final String description;
   final String category;
   final IconData icon;
+  final String? author;
+  final String? repoUrl;
+  final int stars;
   bool isInstalled;
   String? position;
 
@@ -15,10 +18,14 @@ class WidgetModel {
     required this.description,
     required this.category,
     required this.icon,
+    this.author,
+    this.repoUrl,
+    this.stars = 0,
     this.isInstalled = false,
     this.position,
   });
 
+  /// Parse response from the local MagicMirror MMM-Remote-Control API.
   factory WidgetModel.fromJson(Map<String, dynamic> json) {
     return WidgetModel(
       id: json['id'] as String,
@@ -31,6 +38,23 @@ class WidgetModel {
     );
   }
 
+  /// Parse response from the public magicmirror.builders catalogue API.
+  factory WidgetModel.fromCatalogueJson(Map<String, dynamic> json) {
+    final name = (json['name'] as String? ?? 'Unknown').replaceAll('MMM-', '');
+    final category = _mapCategory(json['categories'] as List<dynamic>?);
+    return WidgetModel(
+      id: json['name'] as String? ?? name,
+      name: name,
+      description: json['description'] as String? ?? '',
+      category: category,
+      icon: _iconForCategory(category),
+      author: json['author'] as String?,
+      repoUrl: json['url'] as String?,
+      stars: (json['stars'] as num?)?.toInt() ?? 0,
+      isInstalled: false,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -39,6 +63,32 @@ class WidgetModel {
         'installed': isInstalled,
         'position': position,
       };
+
+  static String _mapCategory(List<dynamic>? cats) {
+    if (cats == null || cats.isEmpty) return 'General';
+    final first = cats.first.toString().toLowerCase();
+    if (first.contains('weather')) return 'Lifestyle';
+    if (first.contains('clock') || first.contains('time')) return 'Utilities';
+    if (first.contains('news') || first.contains('rss')) return 'News';
+    if (first.contains('calendar')) return 'Productivity';
+    if (first.contains('music') || first.contains('media')) return 'Entertainment';
+    if (first.contains('health') || first.contains('fit')) return 'Health';
+    if (first.contains('sensor') || first.contains('iot')) return 'IoT';
+    return 'General';
+  }
+
+  static IconData _iconForCategory(String category) {
+    switch (category) {
+      case 'Lifestyle':     return Icons.cloud;
+      case 'Utilities':    return Icons.access_time;
+      case 'News':         return Icons.newspaper;
+      case 'Productivity': return Icons.calendar_today;
+      case 'Entertainment':return Icons.music_note;
+      case 'Health':       return Icons.fitness_center;
+      case 'IoT':          return Icons.sensors;
+      default:             return Icons.widgets;
+    }
+  }
 }
 
 final List<WidgetModel> demoWidgets = [

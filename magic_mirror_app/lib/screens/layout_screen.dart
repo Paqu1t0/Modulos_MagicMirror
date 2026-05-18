@@ -4,7 +4,7 @@ import '../models/widget_model.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
-// Grid positions for the 3x3 layout
+
 const List<String> _gridPositions = [
   'Top Left',    'Top Center',    'Top Right',
   'Middle Left', 'Center',        'Middle Right',

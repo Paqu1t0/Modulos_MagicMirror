@@ -56,6 +56,7 @@ class MirrorApiService {
 
   // ─── Widgets / Modules ─────────────────────────────────────────────────────
 
+  /// Busca módulos instalados no Mirror via MMM-Remote-Control.
   Future<List<WidgetModel>> getModules() async {
     try {
       final response = await http
@@ -64,6 +65,28 @@ class MirrorApiService {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         return data.map((e) => WidgetModel.fromJson(e)).toList();
+      }
+    } catch (_) {}
+    return demoWidgets;
+  }
+
+  /// Busca o catálogo público de módulos em magicmirror.builders.
+  /// Não requer ligação ao Raspberry Pi.
+  Future<List<WidgetModel>> getCatalogueModules() async {
+    const catalogueUrl =
+        'https://mmm-rest.david-van-laere.be/api/module';
+    try {
+      final response = await http
+          .get(Uri.parse(catalogueUrl))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final modules = data
+            .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
+            .toList();
+        // Ordenar por popularidade (estrelas) descendente
+        modules.sort((a, b) => b.stars.compareTo(a.stars));
+        return modules;
       }
     } catch (_) {}
     return demoWidgets;
