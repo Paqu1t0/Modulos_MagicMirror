@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/mirror_status.dart';
 import '../services/mirror_api_service.dart';
+import '../services/ssh_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -32,18 +33,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _applyAndReset() async {
     setState(() => _applying = true);
-    await MirrorApiService().restartMirror();
-    await Future.delayed(const Duration(seconds: 2));
+    final success = await SshService().restartMagicMirror();
+    await Future.delayed(const Duration(seconds: 1));
     if (mounted) setState(() => _applying = false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Configurações aplicadas e espelho reiniciado!'),
-          backgroundColor: AppTheme.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Comando SSH enviado! Espelho a reiniciar...'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Erro SSH. Verifica as credenciais nas definições.'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 

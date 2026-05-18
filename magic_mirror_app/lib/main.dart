@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 import 'services/mirror_api_service.dart';
+import 'services/ssh_service.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/store_screen.dart';
 import 'screens/layout_screen.dart';
@@ -10,6 +11,7 @@ import 'screens/settings_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await MirrorApiService().init();
+  await SshService().init();
   runApp(const MagicMirrorApp());
 }
 

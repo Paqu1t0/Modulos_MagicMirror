@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../services/mirror_api_service.dart';
+import '../services/ssh_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,9 +16,14 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _ipController = TextEditingController();
   final _portController = TextEditingController();
+  final _sshUserController = TextEditingController();
+  final _sshPassController = TextEditingController();
+  
   bool _saving = false;
   bool _testing = false;
-  String? _connectionResult;
+  
+  String? _apiConnectionResult;
+  String? _sshConnectionResult;
 
   @override
   void initState() {
@@ -29,24 +35,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _ipController.dispose();
     _portController.dispose();
+    _sshUserController.dispose();
+    _sshPassController.dispose();
     super.dispose();
   }
 
   Future<void> _loadConfig() async {
     final ip = await MirrorApiService().getSavedIp();
     final port = await MirrorApiService().getSavedPort();
+    final sshUser = await SshService().getSavedUser();
+    final sshPass = await SshService().getSavedPass();
     if (mounted) {
       _ipController.text = ip;
       _portController.text = port;
+      _sshUserController.text = sshUser;
+      _sshPassController.text = sshPass;
     }
   }
 
   Future<void> _saveConfig() async {
     setState(() => _saving = true);
-    await MirrorApiService().saveConfig(
-      _ipController.text.trim(),
-      _portController.text.trim(),
-    );
+    final ip = _ipController.text.trim();
+    final port = _portController.text.trim();
+    final sshUser = _sshUserController.text.trim();
+    final sshPass = _sshPassController.text.trim();
+    
+    await MirrorApiService().saveConfig(ip, port);
+    await SshService().saveConfig(ip, sshUser, sshPass);
+    
     if (mounted) {
       setState(() { _saving = false; });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,16 +77,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testConnection() async {
-    setState(() { _testing = true; _connectionResult = null; });
-    await MirrorApiService().saveConfig(
-      _ipController.text.trim(),
-      _portController.text.trim(),
-    );
+    setState(() { 
+      _testing = true; 
+      _apiConnectionResult = null;
+      _sshConnectionResult = null;
+    });
+    
+    final ip = _ipController.text.trim();
+    final port = _portController.text.trim();
+    final sshUser = _sshUserController.text.trim();
+    final sshPass = _sshPassController.text.trim();
+    
+    await MirrorApiService().saveConfig(ip, port);
+    await SshService().saveConfig(ip, sshUser, sshPass);
+    
+    // Test API
     final status = await MirrorApiService().getStatus();
+    
+    // Test SSH
+    final sshOk = await SshService().testConnection();
+    
     if (mounted) {
       setState(() {
         _testing = false;
-        _connectionResult = status.isOnline ? 'connected' : 'failed';
+        _apiConnectionResult = status.isOnline ? 'connected' : 'failed';
+        _sshConnectionResult = sshOk ? 'connected' : 'failed';
       });
     }
   }
@@ -91,9 +122,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('Configure a ligação ao Magic Mirror', style: AppTheme.bodyMedium),
               const SizedBox(height: 28),
 
-              // Connection card
+              // Network Connection Card
               _SettingsCard(
-                title: 'Ligação ao Raspberry Pi',
+                title: 'Endereço de Rede',
                 icon: Icons.wifi,
                 child: Column(
                   children: [
@@ -105,57 +136,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 14),
                     _buildField(
-                      label: 'Porta',
+                      label: 'Porta da API (MMM-Remote-Control)',
                       controller: _portController,
                       hint: '8080',
                       keyboardType: TextInputType.number,
                     ),
-                    const SizedBox(height: 20),
-                    // Connection status badge
-                    if (_connectionResult != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        margin: const EdgeInsets.only(bottom: 14),
-                        decoration: BoxDecoration(
-                          color: _connectionResult == 'connected'
-                              ? AppTheme.success.withValues(alpha: 0.1)
-                              : AppTheme.error.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _connectionResult == 'connected'
-                                ? AppTheme.success.withValues(alpha: 0.4)
-                                : AppTheme.error.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _connectionResult == 'connected'
-                                  ? Icons.check_circle_outline
-                                  : Icons.error_outline,
-                              color: _connectionResult == 'connected'
-                                  ? AppTheme.success
-                                  : AppTheme.error,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _connectionResult == 'connected'
-                                  ? 'Conectado com sucesso!'
-                                  : 'Falha na ligação. Verifica o IP e porta.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _connectionResult == 'connected'
-                                    ? AppTheme.success
-                                    : AppTheme.error,
-                              ),
-                            ),
-                          ],
-                        ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // SSH Connection Card
+              _SettingsCard(
+                title: 'Credenciais SSH',
+                icon: Icons.terminal,
+                child: Column(
+                  children: [
+                    _buildField(
+                      label: 'Username',
+                      controller: _sshUserController,
+                      hint: 'pi',
+                    ),
+                    const SizedBox(height: 14),
+                    _buildField(
+                      label: 'Password',
+                      controller: _sshPassController,
+                      hint: 'raspberry',
+                      obscureText: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Actions and Results
+              _SettingsCard(
+                title: 'Ações de Ligação',
+                icon: Icons.sync,
+                child: Column(
+                  children: [
+                    if (_apiConnectionResult != null || _sshConnectionResult != null) ...[
+                      _ConnectionStatusBadge(
+                        label: 'API REST',
+                        status: _apiConnectionResult,
+                        successMessage: 'Conectado!',
+                        errorMessage: 'Falhou. Verifica IP/Porta.',
                       ),
+                      const SizedBox(height: 10),
+                      _ConnectionStatusBadge(
+                        label: 'Terminal SSH',
+                        status: _sshConnectionResult,
+                        successMessage: 'Autenticado!',
+                        errorMessage: 'Falhou. Verifica credenciais.',
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -178,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       color: AppTheme.primary,
                                     ),
                                   )
-                                : const Text('Testar Ligação',
+                                : const Text('Testar Ligações',
                                     style: TextStyle(fontWeight: FontWeight.w600)),
                           ),
                         ),
@@ -214,47 +249,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               // How to configure card
               _SettingsCard(
-                title: 'Como conectar ao Magic Mirror',
+                title: 'Como conectar',
                 icon: Icons.info_outline,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStep('1', 'Instala o módulo MMM-Remote-Control no Raspberry Pi'),
+                    _buildStep('1', 'Descobre o IP do Pi com o comando: hostname -I'),
                     _buildStep('2', 'Garante que o Pi e o telemóvel estão na mesma rede WiFi'),
-                    _buildStep('3', 'Descobre o IP do Pi com o comando: hostname -I'),
-                    _buildStep('4', 'Introduz o IP acima e testa a ligação'),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.iconBg,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'Porta padrão do MMM-Remote-Control: 8080',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.primary,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // App info
-              _SettingsCard(
-                title: 'Sobre a App',
-                icon: Icons.apps,
-                child: Column(
-                  children: [
-                    _buildInfoRow('Versão', '1.0.0'),
-                    const Divider(color: AppTheme.border, height: 20),
-                    _buildInfoRow('Módulo Pi necessário', 'MMM-Remote-Control'),
-                    const Divider(color: AppTheme.border, height: 20),
-                    _buildInfoRow('Protocolo', 'HTTP REST'),
+                    _buildStep('3', 'Preenche as credenciais SSH para poderes instalar módulos diretamente da App'),
                   ],
                 ),
               ),
@@ -274,6 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required TextEditingController controller,
     required String hint,
     TextInputType? keyboardType,
+    bool obscureText = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,6 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
+            obscureText: obscureText,
             style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
@@ -333,18 +337,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+}
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: AppTheme.bodyMedium),
-        Text(value, style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textPrimary,
-        )),
-      ],
+class _ConnectionStatusBadge extends StatelessWidget {
+  final String label;
+  final String? status; // 'connected' | 'failed' | null
+  final String successMessage;
+  final String errorMessage;
+
+  const _ConnectionStatusBadge({
+    required this.label,
+    required this.status,
+    required this.successMessage,
+    required this.errorMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (status == null) return const SizedBox.shrink();
+    final bool isSuccess = status == 'connected';
+    final Color color = isSuccess ? AppTheme.success : AppTheme.error;
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isSuccess ? Icons.check_circle_outline : Icons.error_outline,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  isSuccess ? successMessage : errorMessage,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
