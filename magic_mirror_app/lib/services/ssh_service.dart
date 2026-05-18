@@ -87,4 +87,49 @@ class SshService {
     final result = await executeCommand('pm2 restart MagicMirror');
     return result != null;
   }
+
+  /// Atualiza o config.js para atribuir as classes de página aos módulos.
+  Future<bool> updateMagicMirrorConfig(Map<int, Map<String, String>> pages) async {
+    // Para cada página e para cada módulo, precisamos de um script que edite o config.js
+    // Como parsear JS via Regex em Bash é muito difícil, vamos gerar um script Node.js
+    // que faz o trabalho pesado e enviá-lo para o Pi.
+
+    final script = '''
+const fs = require('fs');
+const path = require('path');
+const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
+if (!fs.existsSync(configPath)) { console.log('Config not found'); process.exit(1); }
+
+let configContent = fs.readFileSync(configPath, 'utf8');
+const pagesData = ${json.encode(pages)};
+
+// Expressão regular básica para remover a tag pagina_X de todos os módulos
+configContent = configContent.replace(/classes:\\s*["']pagina_[0-9]+["']\\s*,?/g, '');
+
+for (const [pageStr, layout] of Object.entries(pagesData)) {
+    for (const [position, moduleName] of Object.entries(layout)) {
+        // Encontra o módulo e adiciona a classe da página e a posição correta
+        // Assume que o módulo existe no config.js
+        const regex = new RegExp(`(module:\\s*["']\${moduleName}["']\\s*,)`);
+        if(configContent.match(regex)) {
+            const posFormatted = position.toLowerCase().replace(' ', '_');
+            configContent = configContent.replace(regex, `\$1\\n    classes: "pagina_\${pageStr}",\\n    position: "\${posFormatted}",`);
+        }
+    }
+}
+
+fs.writeFileSync(configPath, configContent, 'utf8');
+console.log('Config updated');
+''';
+
+    final escapedScript = script.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\\\$', '\\\\\\\$');
+    final command = 'node -e "$escapedScript"';
+    
+    final result = await executeCommand(command);
+    
+    if (result != null && result.contains('Config updated')) {
+      return await restartMagicMirror();
+    }
+    return false;
+  }
 }

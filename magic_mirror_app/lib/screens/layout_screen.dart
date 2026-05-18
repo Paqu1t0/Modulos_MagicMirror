@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/widget_model.dart';
 import '../services/mirror_api_service.dart';
+import '../services/ssh_service.dart';
 import '../widgets/bottom_nav_bar.dart';
-
 
 const List<String> _gridPositions = [
   'Top Left',    'Top Center',    'Top Right',
@@ -20,13 +20,22 @@ class LayoutScreen extends StatefulWidget {
   State<LayoutScreen> createState() => _LayoutScreenState();
 }
 
-class _LayoutScreenState extends State<LayoutScreen> {
-  // position -> widgetId
-  final Map<String, String> _layout = {
-    'Top Left': 'clock',
-    'Top Right': 'weather',
-    'Bottom Left': 'calendar',
-    'Bottom Right': 'news',
+class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  
+  // Page -> Position -> WidgetId
+  final Map<int, Map<String, String>> _layouts = {
+    1: {
+      'Top Left': 'clock',
+      'Top Right': 'weather',
+      'Bottom Center': 'news',
+    },
+    2: {
+      'Center': 'calendar',
+    },
+    3: {
+      'Bottom Right': 'photos',
+    }
   };
 
   List<WidgetModel> _installedWidgets = [];
@@ -35,7 +44,15 @@ class _LayoutScreenState extends State<LayoutScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _loadWidgets();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWidgets() async {
@@ -47,13 +64,15 @@ class _LayoutScreenState extends State<LayoutScreen> {
     }
   }
 
+  int get _currentPage => _tabController.index + 1;
+
   WidgetModel? _widgetAt(String position) {
-    final id = _layout[position];
+    final pageLayout = _layouts[_currentPage] ?? {};
+    final id = pageLayout[position];
     if (id == null) return null;
     try {
       return _installedWidgets.firstWhere((w) => w.id == id);
     } catch (_) {
-      // Widget not in installed list — use demo fallback
       return demoWidgets.firstWhere(
         (w) => w.id == id,
         orElse: () => demoWidgets.first,
@@ -61,9 +80,10 @@ class _LayoutScreenState extends State<LayoutScreen> {
     }
   }
 
-  List<WidgetModel> get _activeWidgets {
+  List<WidgetModel> get _activeWidgetsForCurrentPage {
     final result = <WidgetModel>[];
-    for (final entry in _layout.entries) {
+    final pageLayout = _layouts[_currentPage] ?? {};
+    for (final entry in pageLayout.entries) {
       final w = _widgetAt(entry.key);
       if (w != null) {
         result.add(w..position = entry.key);
@@ -74,22 +94,38 @@ class _LayoutScreenState extends State<LayoutScreen> {
 
   Future<void> _saveLayout() async {
     setState(() => _saving = true);
-    await MirrorApiService().saveLayout(_layout);
+    
+    // Agora enviamos as 3 páginas para o SshService gerar o script
+    final success = await SshService().updateMagicMirrorConfig(_layouts);
+    
     if (mounted) setState(() => _saving = false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Layout guardado com sucesso!'),
-          backgroundColor: AppTheme.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Layouts guardados! Espelho a reiniciar...'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Erro ao atualizar as páginas via SSH.'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
   void _clearPosition(String position) {
-    setState(() => _layout.remove(position));
+    setState(() {
+      _layouts[_currentPage]?.remove(position);
+    });
   }
 
   @override
@@ -97,80 +133,129 @@ class _LayoutScreenState extends State<LayoutScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          children: [
+            // Header e TabBar
+            Container(
+              color: AppTheme.cardBg,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Layout Editor', style: AppTheme.headingLarge),
-                      const SizedBox(height: 4),
-                      const Text('Arrange widgets on your mirror', style: AppTheme.bodyMedium),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text('Layout Editor', style: AppTheme.headingLarge),
+                          SizedBox(height: 4),
+                          Text('Arrange widgets on your mirror', style: AppTheme.bodyMedium),
+                        ],
+                      ),
+                      if (_saving)
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+                        )
+                      else
+                        IconButton(
+                          onPressed: _saveLayout,
+                          icon: const Icon(Icons.save_outlined, color: AppTheme.primary),
+                          tooltip: 'Guardar layouts',
+                        ),
                     ],
                   ),
-                  if (_saving)
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
-                    )
-                  else
-                    IconButton(
-                      onPressed: _saveLayout,
-                      icon: const Icon(Icons.save_outlined, color: AppTheme.primary),
-                      tooltip: 'Guardar layout',
-                    ),
+                  const SizedBox(height: 16),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: AppTheme.primary,
+                    unselectedLabelColor: AppTheme.textMuted,
+                    indicatorColor: AppTheme.primary,
+                    indicatorWeight: 3,
+                    tabs: const [
+                      Tab(text: 'Página 1'),
+                      Tab(text: 'Página 2'),
+                      Tab(text: 'Página 3'),
+                    ],
+                  ),
                 ],
               ),
-              const SizedBox(height: 24),
-
-              // 3×3 Grid
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: AppTheme.cardDecoration,
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.9,
-                  ),
-                  itemCount: _gridPositions.length,
-                  itemBuilder: (_, i) {
-                    final pos = _gridPositions[i];
-                    final w = _widgetAt(pos);
-                    return _LayoutCell(
-                      position: pos,
-                      widget: w,
-                      onTap: w != null ? () => _clearPosition(pos) : null,
-                    );
-                  },
-                ),
+            ),
+            
+            // Conteúdo Tab
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(), // Evitar deslizar acidental nas grelhas
+                children: [
+                  _buildPageContent(),
+                  _buildPageContent(),
+                  _buildPageContent(),
+                ],
               ),
-              const SizedBox(height: 28),
-
-              // Active Widgets list
-              const Text('Active Widgets', style: AppTheme.headingMedium),
-              const SizedBox(height: 14),
-              ..._activeWidgets.map((w) => _ActiveWidgetRow(
-                    widget: w,
-                    onRemove: () => _clearPosition(w.position ?? ''),
-                  )),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: MirrorBottomNavBar(
         currentIndex: 2,
         onTap: widget.onNavigate,
+      ),
+    );
+  }
+
+  Widget _buildPageContent() {
+    final activeWidgets = _activeWidgetsForCurrentPage;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 3×3 Grid
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: AppTheme.cardDecoration,
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.9,
+              ),
+              itemCount: _gridPositions.length,
+              itemBuilder: (_, i) {
+                final pos = _gridPositions[i];
+                final w = _widgetAt(pos);
+                return _LayoutCell(
+                  position: pos,
+                  widget: w,
+                  onTap: w != null ? () => _clearPosition(pos) : null,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // Active Widgets list
+          Text('Widgets Ativos (Página $_currentPage)', style: AppTheme.headingMedium),
+          const SizedBox(height: 14),
+          if (activeWidgets.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text('Nenhum widget nesta página.', style: AppTheme.bodyMedium),
+              ),
+            )
+          else
+            ...activeWidgets.map((w) => _ActiveWidgetRow(
+                  widget: w,
+                  onRemove: () => _clearPosition(w.position ?? ''),
+                )),
+        ],
       ),
     );
   }
