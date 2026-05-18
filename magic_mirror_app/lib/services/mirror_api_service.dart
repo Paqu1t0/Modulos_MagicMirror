@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/mirror_status.dart';
 import '../models/widget_model.dart';
+import 'ssh_service.dart';
 import '../models/preset_model.dart';
 
 class MirrorApiService {
@@ -67,6 +68,13 @@ class MirrorApiService {
         return data.map((e) => WidgetModel.fromJson(e)).toList();
       }
     } catch (_) {}
+
+    // Fallback: Tentamos ler diretamente por SSH se a porta 8080 estiver bloqueada
+    final sshModules = await SshService().fetchRealModules();
+    if (sshModules.isNotEmpty) {
+      return sshModules.map((m) => WidgetModel.fromJson(m)).toList();
+    }
+
     return demoWidgets;
   }
 

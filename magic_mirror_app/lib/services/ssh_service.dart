@@ -132,4 +132,41 @@ console.log('Config updated');
     }
     return false;
   }
+
+  /// Busca os módulos diretamente do config.js no Pi usando SSH
+  Future<List<dynamic>> fetchRealModules() async {
+    final script = '''
+const path = require('path');
+const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
+try {
+  const config = require(configPath);
+  const modules = config.modules.map(m => ({
+    id: m.module,
+    name: m.module.replace('MMM-', ''),
+    position: m.position || '',
+    installed: true,
+    classes: m.classes || ''
+  }));
+  console.log(JSON.stringify({data: modules}));
+} catch(e) {
+  console.log(JSON.stringify({error: e.toString()}));
+}
+''';
+
+    final escapedScript = script.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\\\$', '\\\\\\\$');
+    final command = 'node -e "$escapedScript"';
+    
+    final result = await executeCommand(command);
+    if (result != null && result.isNotEmpty) {
+      try {
+        final decoded = json.decode(result);
+        if (decoded['data'] != null) {
+          return decoded['data'] as List<dynamic>;
+        }
+      } catch (e) {
+        debugPrint('Failed to parse SSH modules: \$e');
+      }
+    }
+    return [];
+  }
 }
