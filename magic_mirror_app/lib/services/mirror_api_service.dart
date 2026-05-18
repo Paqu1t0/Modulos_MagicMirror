@@ -51,7 +51,7 @@ class MirrorApiService {
         return MirrorStatus.fromJson(json.decode(response.body));
       }
     } catch (_) {}
-    return MirrorStatus.demo;
+    return MirrorStatus.offline;
   }
 
   // ─── Widgets / Modules ─────────────────────────────────────────────────────

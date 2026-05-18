@@ -34,4 +34,13 @@ class MirrorStatus {
         activeWidgets: 12,
         savedPresets: 4,
       );
+
+  static MirrorStatus get offline => const MirrorStatus(
+        isOnline: false,
+        wifiStrong: false,
+        isPowered: false,
+        isSynced: false,
+        activeWidgets: 0,
+        savedPresets: 0,
+      );
 }
