@@ -166,7 +166,7 @@ class _ActivePresetCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(preset.icon, color: Colors.white, size: 22),
@@ -174,7 +174,7 @@ class _ActivePresetCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.25),
+                  color: Colors.white.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -192,12 +192,12 @@ class _ActivePresetCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             preset.description,
-            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
           ),
           const SizedBox(height: 12),
           Text(
             '${preset.widgetCount} widgets configured',
-            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
           ),
         ],
       ),
@@ -222,7 +222,7 @@ class _PresetListItem extends StatelessWidget {
         color: preset.isActive ? AppTheme.primaryLight : AppTheme.cardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: preset.isActive ? AppTheme.primary.withOpacity(0.3) : AppTheme.border,
+          color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.3) : AppTheme.border,
         ),
       ),
       child: Column(
@@ -234,7 +234,7 @@ class _PresetListItem extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: preset.isActive ? AppTheme.primary.withOpacity(0.15) : AppTheme.iconBg,
+                  color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.iconBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(preset.icon,

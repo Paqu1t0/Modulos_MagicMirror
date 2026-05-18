@@ -119,13 +119,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         margin: const EdgeInsets.only(bottom: 14),
                         decoration: BoxDecoration(
                           color: _connectionResult == 'connected'
-                              ? AppTheme.success.withOpacity(0.1)
-                              : AppTheme.error.withOpacity(0.1),
+                              ? AppTheme.success.withValues(alpha: 0.1)
+                              : AppTheme.error.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: _connectionResult == 'connected'
-                                ? AppTheme.success.withOpacity(0.4)
-                                : AppTheme.error.withOpacity(0.4),
+                                ? AppTheme.success.withValues(alpha: 0.4)
+                                : AppTheme.error.withValues(alpha: 0.4),
                           ),
                         ),
                         child: Row(
