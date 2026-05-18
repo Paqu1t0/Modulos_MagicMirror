@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,7 +56,8 @@ class SshService {
   }
 
   Future<SSHClient> _connect() async {
-    final socket = await SSHSocket.connect(_ip, 22, timeout: const Duration(seconds: 5));
+    final socket = await SSHSocket.connect(_ip, 22,
+        timeout: const Duration(seconds: 8));
     return SSHClient(
       socket,
       username: _user,
@@ -63,7 +65,7 @@ class SshService {
     );
   }
 
-  /// Executa um comando no Raspberry Pi e devolve o output (stdout).
+  /// Executa um comando simples e devolve stdout.
   Future<String?> executeCommand(String command) async {
     try {
       final client = await _connect();
@@ -71,120 +73,179 @@ class SshService {
       client.close();
       return utf8.decode(result);
     } catch (e) {
-      debugPrint('SSH Execute Error ($command): $e');
+      debugPrint('SSH Execute Error: $e');
       return null;
     }
   }
 
-  /// Reinicia fisicamente o Raspberry Pi.
+  /// Corre um script Node.js enviando-o via stdin (node -)
+  /// Evita todos os problemas de escaping de shell.
+  Future<String?> _runNodeScript(String jsCode) async {
+    try {
+      final client = await _connect();
+      // 'node -' lê o script do stdin — sem escaping de shell necessário
+      final session = await client.execute('node -');
+      session.stdin.add(Uint8List.fromList(utf8.encode(jsCode)));
+      await session.stdin.close();
+
+      final chunks = <int>[];
+      await for (final chunk in session.stdout) {
+        chunks.addAll(chunk);
+      }
+      client.close();
+      final output = utf8.decode(chunks);
+      debugPrint('Node script output: $output');
+      return output.isNotEmpty ? output : null;
+    } catch (e) {
+      debugPrint('_runNodeScript error: $e');
+      return null;
+    }
+  }
+
+  // ─── Controlo ──────────────────────────────────────────────────────────────
+
   Future<bool> rebootPi() async {
     final result = await executeCommand('sudo reboot');
     return result != null;
   }
 
-  /// Reinicia apenas o processo do MagicMirror (via pm2).
   Future<bool> restartMagicMirror() async {
-    final result = await executeCommand('pm2 restart MagicMirror');
-    return result != null;
+    // Tenta pm2 primeiro, depois systemctl, depois npm start
+    for (final cmd in [
+      'pm2 restart MagicMirror',
+      'systemctl restart magicmirror 2>/dev/null',
+    ]) {
+      final result = await executeCommand(cmd);
+      if (result != null) return true;
+    }
+    return false;
   }
 
-  // ─── Módulos ───────────────────────────────────────────────────────────────
+  // ─── Módulos instalados ────────────────────────────────────────────────────
 
-  /// Instala um módulo via git clone na pasta de módulos do MagicMirror.
-  /// [repoUrl] — URL do repositório GitHub, ex: https://github.com/user/MMM-Foo
-  /// [moduleName] — nome da pasta, ex: MMM-Foo
-  Future<bool> installModule(String repoUrl, String moduleName) async {
-    final dir = '\$HOME/MagicMirror/modules/$moduleName';
-    // Se já existir, não faz nada
-    final check = await executeCommand('[ -d "$dir" ] && echo exists || echo notfound');
-    if (check != null && check.trim() == 'exists') return true;
-
-    final result = await executeCommand(
-      'git clone --depth=1 "$repoUrl" "$dir" 2>&1',
-    );
-    if (result == null) return false;
-
-    // Instalar dependências npm se existir package.json
-    final npmResult = await executeCommand(
-      '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || echo "no-npm"',
-    );
-    debugPrint('npm install: $npmResult');
-    return true;
-  }
-
-  /// Remove um módulo da pasta de módulos do MagicMirror.
-  Future<bool> removeModule(String moduleName) async {
-    final dir = '\$HOME/MagicMirror/modules/$moduleName';
-    final result = await executeCommand('rm -rf "$dir" 2>&1 && echo OK');
-    return result != null && result.contains('OK');
-  }
-
-  /// Atualiza um módulo via git pull.
-  Future<bool> updateModule(String moduleName) async {
-    final dir = '\$HOME/MagicMirror/modules/$moduleName';
-    final result = await executeCommand(
-      'cd "$dir" && git pull 2>&1 && echo GIT_DONE',
-    );
-    if (result == null || !result.contains('GIT_DONE')) return false;
-
-    // Re-instalar dependências se necessário
-    await executeCommand(
-      '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true',
-    );
-    return true;
-  }
-
-  /// Devolve a lista dos nomes das pastas em ~/MagicMirror/modules (módulos instalados).
+  /// Lista os nomes das pastas em ~/MagicMirror/modules.
+  /// Esta abordagem funciona sempre — não precisa de node.
   Future<List<String>> listInstalledModuleNames() async {
     final result = await executeCommand(
-      r"ls -1 $HOME/MagicMirror/modules 2>/dev/null | grep -v '^default$'",
+      r"ls -1 $HOME/MagicMirror/modules 2>/dev/null | grep -vE '^(default|node_modules|\..*)'",
     );
     if (result == null || result.trim().isEmpty) return [];
     return result.trim().split('\n').where((s) => s.isNotEmpty).toList();
   }
 
+  /// Busca módulos instalados do Pi.
+  /// Tenta 3 abordagens por ordem de confiança:
+  ///   1. Node.js via stdin (dados completos com posição)
+  ///   2. ls da pasta de módulos (só nomes, sem posição)
+  Future<List<dynamic>> fetchRealModules() async {
+    // ── Tentativa 1: Node.js via stdin ──────────────────────────────────────
+    const jsScript = r"""
+const path = require('path');
+const fs = require('fs');
+const home = process.env.HOME || '/home/pi';
+const configPath = path.join(home, 'MagicMirror/config/config.js');
+try {
+  // Limpar cache para forçar releitura
+  delete require.cache[require.resolve(configPath)];
+  const config = require(configPath);
+  const modules = (config.modules || []).map(m => ({
+    id: m.module,
+    name: m.module.replace(/^MMM-/, ''),
+    description: '',
+    position: m.position || '',
+    installed: true,
+    classes: m.classes || ''
+  }));
+  console.log(JSON.stringify({ ok: true, data: modules }));
+} catch(e) {
+  // Fallback: listar pastas
+  const modDir = path.join(home, 'MagicMirror/modules');
+  try {
+    const dirs = fs.readdirSync(modDir).filter(d => d !== 'default' && !d.startsWith('.'));
+    const modules = dirs.map(d => ({
+      id: d,
+      name: d.replace(/^MMM-/, ''),
+      description: '',
+      position: '',
+      installed: true,
+      classes: ''
+    }));
+    console.log(JSON.stringify({ ok: true, data: modules }));
+  } catch(e2) {
+    console.log(JSON.stringify({ ok: false, error: e2.toString() }));
+  }
+}
+""";
+    final nodeResult = await _runNodeScript(jsScript);
+    if (nodeResult != null && nodeResult.isNotEmpty) {
+      try {
+        final decoded = json.decode(nodeResult.trim());
+        if (decoded['ok'] == true && decoded['data'] != null) {
+          return decoded['data'] as List<dynamic>;
+        }
+      } catch (e) {
+        debugPrint('fetchRealModules node parse error: $e');
+      }
+    }
+
+    // ── Tentativa 2: ls simples (sem node) ──────────────────────────────────
+    debugPrint('fetchRealModules: node falhou, a usar ls');
+    final names = await listInstalledModuleNames();
+    if (names.isNotEmpty) {
+      return names
+          .map((n) => {
+                'id': n,
+                'name': n.replaceAll('MMM-', '').replaceAll('-', ' '),
+                'description': '',
+                'position': '',
+                'installed': true,
+                'classes': '',
+              })
+          .toList();
+    }
+
+    return [];
+  }
+
   // ─── Layout ────────────────────────────────────────────────────────────────
 
   /// Lê o config.js e devolve o layout actual agrupado por página.
-  /// Retorna Map(page, Map(position, moduleName)).
-  /// Se o módulo não tiver classes "pagina_X", é colocado na página 1.
   Future<Map<int, Map<String, String>>> fetchLayoutFromConfig() async {
-    const script = r"""
+    const jsScript = r"""
 const path = require('path');
-const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
+const home = process.env.HOME || '/home/pi';
+const configPath = path.join(home, 'MagicMirror/config/config.js');
 try {
+  delete require.cache[require.resolve(configPath)];
   const config = require(configPath);
-  const result = { 1: {}, 2: {}, 3: {} };
-  for (const m of config.modules) {
+  const result = { '1': {}, '2': {}, '3': {} };
+  for (const m of (config.modules || [])) {
     const classes = m.classes || '';
     const pageMatch = classes.match(/pagina_([123])/);
-    const page = pageMatch ? parseInt(pageMatch[1]) : 1;
+    const page = pageMatch ? pageMatch[1] : '1';
     const pos = m.position || '';
     if (pos) {
       const posKey = pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       result[page][posKey] = m.module;
     }
   }
-  console.log(JSON.stringify({ data: result }));
+  console.log(JSON.stringify({ ok: true, data: result }));
 } catch(e) {
-  console.log(JSON.stringify({ error: e.toString() }));
+  console.log(JSON.stringify({ ok: false, error: e.toString() }));
 }
 """;
-
-    final escaped = _escapeForNodeE(script);
-    final result = await executeCommand('node -e "$escaped"');
+    final result = await _runNodeScript(jsScript);
     if (result != null && result.isNotEmpty) {
       try {
         final decoded = json.decode(result.trim());
-        if (decoded['data'] != null) {
+        if (decoded['ok'] == true && decoded['data'] != null) {
           final raw = decoded['data'] as Map<String, dynamic>;
           final layout = <int, Map<String, String>>{};
           raw.forEach((pageStr, positions) {
             final page = int.tryParse(pageStr) ?? 1;
             final posMap = <String, String>{};
-            (positions as Map<String, dynamic>).forEach((pos, mod) {
-              posMap[pos] = mod.toString();
-            });
+            (positions as Map<String, dynamic>)
+                .forEach((pos, mod) => posMap[pos] = mod.toString());
             layout[page] = posMap;
           });
           return layout;
@@ -197,81 +258,78 @@ try {
   }
 
   /// Atualiza o config.js para atribuir as classes de página aos módulos.
-  Future<bool> updateMagicMirrorConfig(Map<int, Map<String, String>> pages) async {
-    // Combinamos raw strings com interpolação para evitar escapes desnecessários
-    final scriptPart1 = r"""
+  Future<bool> updateMagicMirrorConfig(
+      Map<int, Map<String, String>> pages) async {
+    final pagesJson = json.encode(
+        pages.map((k, v) => MapEntry(k.toString(), v)));
+
+    final jsScript = """
 const fs = require('fs');
 const path = require('path');
-const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
-if (!fs.existsSync(configPath)) { console.log('Config not found'); process.exit(1); }
-let configContent = fs.readFileSync(configPath, 'utf8');
-const pagesData = """;
-    final scriptPart2 = r""";
-configContent = configContent.replace(/classes:\s*["']pagina_[0-9]+["']\s*,?/g, '');
-for (const [pageStr, layout] of Object.entries(pagesData)) {
-    for (const [position, moduleName] of Object.entries(layout)) {
-        const regex = new RegExp('(module:\\s*["\']' + moduleName + '["\']\\s*,)');
-        if (configContent.match(regex)) {
-            const posFormatted = position.toLowerCase().replace(' ', '_');
-            configContent = configContent.replace(regex, '$1\n    classes: "pagina_' + pageStr + '",\n    position: "' + posFormatted + '",');
-        }
-    }
+const home = process.env.HOME || '/home/pi';
+const configPath = path.join(home, 'MagicMirror/config/config.js');
+if (!fs.existsSync(configPath)) {
+  console.log(JSON.stringify({ ok: false, error: 'config not found' }));
+  process.exit(1);
 }
-fs.writeFileSync(configPath, configContent, 'utf8');
-console.log('Config updated');
+let content = fs.readFileSync(configPath, 'utf8');
+const pages = $pagesJson;
+
+// Remover classes pagina_X existentes
+content = content.replace(/,?\\s*classes:\\s*["']pagina_[0-9]+["']/g, '');
+
+for (const [pageNum, layout] of Object.entries(pages)) {
+  for (const [position, moduleName] of Object.entries(layout)) {
+    const posFormatted = position.toLowerCase().replace(/ /g, '_');
+    // Procura a entrada do módulo e adiciona/substitui position e classes
+    const modRe = new RegExp('(module:\\\\s*["\\'']' + moduleName.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\\$&') + '["\\'']\\\\s*,)', 'g');
+    content = content.replace(modRe, '\$1\\n    position: "' + posFormatted + '",\\n    classes: "pagina_' + pageNum + '",');
+  }
+}
+
+fs.writeFileSync(configPath, content, 'utf8');
+console.log(JSON.stringify({ ok: true }));
 """;
-    final script = scriptPart1 + json.encode(pages) + scriptPart2;
-
-    final escaped = _escapeForNodeE(script);
-    final result = await executeCommand('node -e "$escaped"');
-
-    if (result != null && result.contains('Config updated')) {
-      return await restartMagicMirror();
+    final result = await _runNodeScript(jsScript);
+    if (result != null) {
+      try {
+        final decoded = json.decode(result.trim());
+        if (decoded['ok'] == true) return await restartMagicMirror();
+      } catch (_) {}
     }
     return false;
   }
 
-  /// Busca os módulos diretamente do config.js no Pi usando SSH.
-  Future<List<dynamic>> fetchRealModules() async {
-    const script = r"""
-const path = require('path');
-const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
-try {
-  const config = require(configPath);
-  const modules = config.modules.map(m => ({
-    id: m.module,
-    name: m.module.replace('MMM-', ''),
-    position: m.position || '',
-    installed: true,
-    classes: m.classes || ''
-  }));
-  console.log(JSON.stringify({data: modules}));
-} catch(e) {
-  console.log(JSON.stringify({error: e.toString()}));
-}
-""";
+  // ─── Instalar / Remover / Atualizar ────────────────────────────────────────
 
-    final escaped = _escapeForNodeE(script);
-    final result = await executeCommand('node -e "$escaped"');
-    if (result != null && result.isNotEmpty) {
-      try {
-        final decoded = json.decode(result.trim());
-        if (decoded['data'] != null) {
-          return decoded['data'] as List<dynamic>;
-        }
-      } catch (e) {
-        debugPrint('Failed to parse SSH modules: $e');
-      }
-    }
-    return [];
+  Future<bool> installModule(String repoUrl, String moduleName) async {
+    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final check =
+        await executeCommand('[ -d "$dir" ] && echo exists || echo notfound');
+    if (check != null && check.trim() == 'exists') return true;
+
+    final clone = await executeCommand(
+        'git clone --depth=1 "$repoUrl" "$dir" 2>&1 && echo GIT_OK');
+    if (clone == null || !clone.contains('GIT_OK')) return false;
+
+    await executeCommand(
+        '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true');
+    return true;
   }
 
-  /// Escapa um script JS para ser passado com `node -e "..."`.
-  String _escapeForNodeE(String script) {
-    return script
-        .replaceAll('\\', '\\\\')
-        .replaceAll('"', '\\"')
-        .replaceAll('\n', '\\n')
-        .replaceAll('\r', '');
+  Future<bool> removeModule(String moduleName) async {
+    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final result = await executeCommand('rm -rf "$dir" && echo RM_OK');
+    return result != null && result.contains('RM_OK');
+  }
+
+  Future<bool> updateModule(String moduleName) async {
+    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final result =
+        await executeCommand('cd "$dir" && git pull 2>&1 && echo GIT_DONE');
+    if (result == null || !result.contains('GIT_DONE')) return false;
+    await executeCommand(
+        '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true');
+    return true;
   }
 }

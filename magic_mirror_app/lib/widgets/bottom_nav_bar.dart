@@ -36,9 +36,9 @@ class MirrorBottomNavBar extends StatelessWidget {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.storefront_outlined),
-            activeIcon: Icon(Icons.storefront),
-            label: 'Store',
+            icon: Icon(Icons.library_books_outlined),
+            activeIcon: Icon(Icons.library_books),
+            label: 'Biblioteca',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.grid_view_outlined),
