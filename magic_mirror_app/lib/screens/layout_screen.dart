@@ -4,11 +4,6 @@ import '../models/widget_model.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
-const List<String> _gridPositions = [
-  'Top Left',    'Top Center',    'Top Right',
-  'Middle Left', 'Center',        'Middle Right',
-  'Bottom Left', 'Bottom Center', 'Bottom Right',
-];
 
 class LayoutScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
@@ -85,33 +80,64 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
   int get _currentPage => _tabController.index + 1;
 
-  WidgetModel? _widgetAt(String position) {
-    final id = _layouts[_currentPage]?[position];
-    if (id == null) return null;
-    try {
-      return _installedWidgets.firstWhere((w) => w.id == id);
-    } catch (_) {
+  List<WidgetModel> _widgetsAt(String position) {
+    final val = _layouts[_currentPage]?[position];
+    if (val == null || val.isEmpty) return [];
+
+    final ids = val.split(',');
+    final list = <WidgetModel>[];
+    final available = _installedWidgets.isEmpty ? demoWidgets : _installedWidgets;
+    for (final id in ids) {
       try {
-        return demoWidgets.firstWhere((w) => w.id == id);
+        final w = available.firstWhere((w) => w.id == id);
+        list.add(WidgetModel(
+          id: w.id,
+          name: w.name,
+          description: w.description,
+          category: w.category,
+          icon: w.icon,
+          position: position,
+        ));
       } catch (_) {
-        return null;
+        try {
+          final w = demoWidgets.firstWhere((w) => w.id == id);
+          list.add(WidgetModel(
+            id: w.id,
+            name: w.name,
+            description: w.description,
+            category: w.category,
+            icon: w.icon,
+            position: position,
+          ));
+        } catch (_) {
+          list.add(WidgetModel(
+            id: id,
+            name: id,
+            description: '',
+            category: 'General',
+            icon: Icons.extension,
+            position: position,
+          ));
+        }
       }
     }
+    return list;
   }
 
   List<WidgetModel> get _activeWidgetsForCurrentPage {
     final result = <WidgetModel>[];
     final pageLayout = _layouts[_currentPage] ?? {};
     for (final entry in pageLayout.entries) {
-      final w = _widgetAt(entry.key);
-      if (w != null) result.add(w..position = entry.key);
+      final list = _widgetsAt(entry.key);
+      result.addAll(list);
     }
     return result;
   }
 
   // Abre picker para escolher um widget a colocar num slot vazio
-  Future<void> _pickWidgetForSlot(String position) async {
+  Future<void> _pickWidgetForSlot(String position, {bool append = false}) async {
     final available = _installedWidgets.isEmpty ? demoWidgets : _installedWidgets;
+    final activeIds = _activeWidgetsForCurrentPage.map((w) => w.id).toList();
 
     final chosen = await showModalBottomSheet<WidgetModel>(
       context: context,
@@ -122,19 +148,36 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
       builder: (ctx) => _WidgetPickerSheet(
         position: position,
         widgets: available,
+        activeWidgetIds: activeIds,
       ),
     );
 
     if (chosen != null && mounted) {
       setState(() {
+        final currentVal = _layouts[_currentPage]?[position] ?? '';
+        final currentIds = currentVal.isEmpty ? <String>[] : currentVal.split(',');
+
+        if (append) {
+          // Permite duplicados (como colocar dois do mesmo tipo "weather" no mesmo slot)
+          currentIds.add(chosen.id);
+        } else {
+          currentIds.clear();
+          currentIds.add(chosen.id);
+        }
+
+        // Garante no máximo 2 widgets
+        if (currentIds.length > 2) {
+          currentIds.removeAt(0);
+        }
+
         _layouts[_currentPage] ??= {};
-        _layouts[_currentPage]![position] = chosen.id;
+        _layouts[_currentPage]![position] = currentIds.join(',');
       });
     }
   }
 
   // Opções ao tocar numa célula ocupada
-  void _onOccupiedCellTap(String position, WidgetModel widget) {
+  void _onOccupiedCellTap(String position, List<WidgetModel> widgets) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surface,
@@ -155,26 +198,47 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              ListTile(
-                leading: Icon(widget.icon, color: AppTheme.primary),
-                title: Text(widget.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(position, style: AppTheme.bodySmall),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Slot: $position',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                ),
               ),
               const Divider(),
+              if (widgets.length < 2)
+                ListTile(
+                  leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                  title: const Text('Adicionar segundo widget neste slot'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickWidgetForSlot(position, append: true);
+                  },
+                ),
+              ...widgets.map((w) => ListTile(
+                    leading: Icon(w.icon, color: AppTheme.primary),
+                    title: Text('Remover ${w.name}'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        final ids = _layouts[_currentPage]?[position]?.split(',') ?? [];
+                        ids.remove(w.id);
+                        if (ids.isEmpty) {
+                          _layouts[_currentPage]?.remove(position);
+                        } else {
+                          _layouts[_currentPage]![position] = ids.join(',');
+                        }
+                      });
+                    },
+                  )),
               ListTile(
-                leading: const Icon(Icons.swap_horiz, color: AppTheme.primary),
-                title: const Text('Trocar Widget'),
+                leading: const Icon(Icons.delete_outline, color: AppTheme.error),
+                title: const Text('Limpar Slot Completo', style: TextStyle(color: AppTheme.error)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickWidgetForSlot(position);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.remove_circle_outline, color: AppTheme.error),
-                title: const Text('Remover do Slot', style: TextStyle(color: AppTheme.error)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() => _layouts[_currentPage]?.remove(position));
+                  setState(() {
+                    _layouts[_currentPage]?.remove(position);
+                  });
                 },
               ),
             ],
@@ -219,13 +283,20 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Layout Editor', style: AppTheme.headingLarge),
-                          SizedBox(height: 4),
-                          Text('Toca num slot para adicionar um widget', style: AppTheme.bodyMedium),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('Layout Editor', style: AppTheme.headingLarge),
+                            SizedBox(height: 4),
+                            Text(
+                              'Toca num slot para adicionar um widget',
+                              style: AppTheme.bodyMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                       Row(
                         children: [
@@ -290,6 +361,93 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     );
   }
 
+  Widget _buildGridCell(String position, double heightFactor) {
+    final list = _widgetsAt(position);
+    final cell = SizedBox(
+      height: 70 * heightFactor,
+      child: _LayoutCell(
+        position: position,
+        widgets: list,
+        onTap: list.isNotEmpty
+            ? () => _onOccupiedCellTap(position, list)
+            : () => _pickWidgetForSlot(position),
+      ),
+    );
+
+    final dragTarget = DragTarget<String>(
+      onWillAcceptWithDetails: (details) => details.data != position,
+      onAcceptWithDetails: (details) {
+        final sourcePosition = details.data;
+        setState(() {
+          final sourceWidgetId = _layouts[_currentPage]?[sourcePosition];
+          final targetWidgetId = _layouts[_currentPage]?[position];
+
+          if (sourceWidgetId != null) {
+            if (targetWidgetId != null) {
+              _layouts[_currentPage]![sourcePosition] = targetWidgetId;
+              _layouts[_currentPage]![position] = sourceWidgetId;
+            } else {
+              _layouts[_currentPage]!.remove(sourcePosition);
+              _layouts[_currentPage]![position] = sourceWidgetId;
+            }
+          }
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isHovered
+                ? [
+                    BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    )
+                  ]
+                : [],
+          ),
+          child: cell,
+        );
+      },
+    );
+
+    if (list.isNotEmpty) {
+      return Draggable<String>(
+        data: position,
+        feedback: Material(
+          color: Colors.transparent,
+          child: SizedBox(
+            width: 120,
+            height: 70 * heightFactor,
+            child: Opacity(
+              opacity: 0.8,
+              child: _LayoutCell(
+                position: position,
+                widgets: list,
+              ),
+            ),
+          ),
+        ),
+        childWhenDragging: SizedBox(
+          height: 70 * heightFactor,
+          child: Opacity(
+            opacity: 0.3,
+            child: _LayoutCell(
+              position: position,
+              widgets: list,
+            ),
+          ),
+        ),
+        child: dragTarget,
+      );
+    }
+
+    return dragTarget;
+  }
+
   Widget _buildPageContent() {
     final activeWidgets = _activeWidgetsForCurrentPage;
     return SingleChildScrollView(
@@ -307,31 +465,42 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
           ),
           const SizedBox(height: 14),
 
-          // 3×3 Grid
+          // Custom MagicMirror Grid layout
           Container(
             padding: const EdgeInsets.all(12),
             decoration: AppTheme.cardDecoration,
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.9,
-              ),
-              itemCount: _gridPositions.length,
-              itemBuilder: (_, i) {
-                final pos = _gridPositions[i];
-                final w = _widgetAt(pos);
-                return _LayoutCell(
-                  position: pos,
-                  widget: w,
-                  onTap: w != null
-                      ? () => _onOccupiedCellTap(pos, w)
-                      : () => _pickWidgetForSlot(pos),
-                );
-              },
+            child: Column(
+              children: [
+                _buildGridCell('Top Bar', 0.8),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: _buildGridCell('Top Left', 1.0)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildGridCell('Top Center', 1.0)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildGridCell('Top Right', 1.0)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildGridCell('Upper Third', 0.8),
+                const SizedBox(height: 10),
+                _buildGridCell('Middle Center', 0.8),
+                const SizedBox(height: 10),
+                _buildGridCell('Lower Third', 0.8),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: _buildGridCell('Bottom Left', 1.0)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildGridCell('Bottom Center', 1.0)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildGridCell('Bottom Right', 1.0)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildGridCell('Bottom Bar', 0.8),
+              ],
             ),
           ),
           const SizedBox(height: 28),
@@ -358,7 +527,18 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
             ...activeWidgets.map((w) => _ActiveWidgetRow(
                   widget: w,
                   onSwap: () => _pickWidgetForSlot(w.position ?? ''),
-                  onRemove: () => setState(() => _layouts[_currentPage]?.remove(w.position)),
+                  onRemove: () => setState(() {
+                    final pos = w.position;
+                    if (pos != null) {
+                      final ids = _layouts[_currentPage]?[pos]?.split(',') ?? [];
+                      ids.remove(w.id);
+                      if (ids.isEmpty) {
+                        _layouts[_currentPage]?.remove(pos);
+                      } else {
+                        _layouts[_currentPage]![pos] = ids.join(',');
+                      }
+                    }
+                  }),
                 )),
         ],
       ),
@@ -392,14 +572,14 @@ class _LegendDot extends StatelessWidget {
 
 class _LayoutCell extends StatelessWidget {
   final String position;
-  final WidgetModel? widget;
+  final List<WidgetModel> widgets;
   final VoidCallback? onTap;
 
-  const _LayoutCell({required this.position, this.widget, this.onTap});
+  const _LayoutCell({required this.position, required this.widgets, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final isOccupied = widget != null;
+    final isOccupied = widgets.isNotEmpty;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -418,36 +598,85 @@ class _LayoutCell extends StatelessWidget {
         ),
         child: Center(
           child: isOccupied
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(widget!.icon, color: AppTheme.primary, size: 22),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget!.name,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
+              ? (widgets.length == 1
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(widgets[0].icon, color: AppTheme.primary, size: 18),
+                        const SizedBox(height: 4),
+                        Text(
+                          widgets[0].name,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(widgets[0].icon, color: AppTheme.primary, size: 12),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widgets[0].name,
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  textAlign: TextAlign.left,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(widgets[1].icon, color: AppTheme.primary, size: 12),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widgets[1].name,
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  textAlign: TextAlign.left,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.touch_app, size: 12, color: AppTheme.textMuted),
-                  ],
-                )
+                    ))
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, color: AppTheme.textMuted, size: 22),
-                    const SizedBox(height: 4),
+                    const Icon(Icons.add, color: AppTheme.textMuted, size: 18),
+                    const SizedBox(height: 2),
                     Text(
                       position,
-                      style: AppTheme.bodySmall,
+                      style: AppTheme.bodySmall.copyWith(fontSize: 10),
                       textAlign: TextAlign.center,
-                      maxLines: 2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -516,8 +745,13 @@ class _ActiveWidgetRow extends StatelessWidget {
 class _WidgetPickerSheet extends StatefulWidget {
   final String position;
   final List<WidgetModel> widgets;
+  final List<String> activeWidgetIds;
 
-  const _WidgetPickerSheet({required this.position, required this.widgets});
+  const _WidgetPickerSheet({
+    required this.position,
+    required this.widgets,
+    required this.activeWidgetIds,
+  });
 
   @override
   State<_WidgetPickerSheet> createState() => _WidgetPickerSheetState();
@@ -549,7 +783,7 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Adicionar a "${ widget.position}"', style: AppTheme.headingMedium),
+              Text('Adicionar a "${widget.position}"', style: AppTheme.headingMedium),
               const SizedBox(height: 12),
               // Search
               Container(
@@ -559,7 +793,7 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
                   border: Border.all(color: AppTheme.border),
                 ),
                 child: TextField(
-                  autofocus: true,
+                  autofocus: false,
                   decoration: const InputDecoration(
                     hintText: 'Pesquisar widget...',
                     prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 20),
@@ -582,22 +816,35 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
             itemCount: filtered.length,
             itemBuilder: (_, i) {
               final w = filtered[i];
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                leading: Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: AppTheme.iconBg,
-                    borderRadius: BorderRadius.circular(10),
+              final isActive = widget.activeWidgetIds.contains(w.id);
+
+              return Opacity(
+                opacity: isActive ? 0.4 : 1.0,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  leading: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: AppTheme.iconBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(w.icon, color: AppTheme.primary, size: 20),
                   ),
-                  child: Icon(w.icon, color: AppTheme.primary, size: 20),
+                  title: Text(w.name, style: const TextStyle(
+                    fontWeight: FontWeight.w600, color: AppTheme.textPrimary,
+                  )),
+                  subtitle: Text(
+                    isActive ? 'Já adicionado nesta página' : w.category,
+                    style: TextStyle(
+                      color: isActive ? AppTheme.error : AppTheme.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  trailing: isActive
+                      ? const Icon(Icons.check_circle, color: AppTheme.success)
+                      : const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                  onTap: isActive ? null : () => Navigator.pop(context, w),
                 ),
-                title: Text(w.name, style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: AppTheme.textPrimary,
-                )),
-                subtitle: Text(w.category, style: AppTheme.bodySmall),
-                trailing: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
-                onTap: () => Navigator.pop(context, w),
               );
             },
           ),

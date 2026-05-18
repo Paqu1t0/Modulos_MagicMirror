@@ -15,7 +15,7 @@ Module.register("MMM-GestorPaginas", {
 
     // Apenas organiza os módulos quando o espelho acaba de arrancar a 100%
     notificationReceived: function(notification, payload, sender) {
-        if (notification === "MODULE_DOM_CREATED") {
+        if (notification === "MODULE_DOM_CREATED" || notification === "ALL_MODULES_STARTED") {
             this.atualizarVisibilidadeModulos();
         }
     },
@@ -58,19 +58,43 @@ Module.register("MMM-GestorPaginas", {
     },
 
     // A magia de esconder e mostrar módulos
+    // A magia de esconder, mostrar e mover os módulos entre regiões dinamicamente
     atualizarVisibilidadeModulos: function() {
         const self = this;
         const modules = MM.getModules();
         
         modules.enumerate(function(module) {
+            const classes = (module.data && typeof module.data.classes === "string") ? module.data.classes : "";
+
             // Módulos que devem estar SEMPRE visíveis (como o próprio gestor e o teu sensor)
-            if (module.name === "MMM-GestorPaginas" || module.name === "MMM-Ultrasonic" || module.data.classes.includes("sempre_visivel")) {
+            if (module.name === "MMM-GestorPaginas" || module.name === "MMM-Ultrasonic" || classes.includes("sempre_visivel")) {
                 module.show(self.config.animacao, {lockString: self.identifier});
                 return;
             }
 
             // Se o módulo tem a tag da página atual, mostra-o!
-            if (module.data.classes.includes("pagina_" + self.paginaAtual)) {
+            if (classes.includes("pagina_" + self.paginaAtual)) {
+                // 1. Mover dinamicamente o módulo para a sua posição nesta página se estiver configurado
+                const posRegex = new RegExp("pagina_" + self.paginaAtual + "_pos_([a-z_]+)");
+                const posMatch = classes.match(posRegex);
+                let targetPos = null;
+                
+                if (posMatch) {
+                    targetPos = posMatch[1];
+                } else if (module.data && module.data.position) {
+                    targetPos = module.data.position; // Fallback para posição original
+                }
+
+                if (targetPos) {
+                    const regionSelector = ".region." + targetPos.replace(/_/g, ".") + " .container";
+                    const container = document.querySelector(regionSelector);
+                    const wrapper = document.getElementById(module.identifier);
+                    if (container && wrapper && wrapper.parentElement !== container) {
+                        container.appendChild(wrapper);
+                    }
+                }
+
+                // 2. Mostrar o módulo
                 module.show(self.config.animacao, {lockString: self.identifier});
             } else {
                 // Se não tem, esconde-o!
