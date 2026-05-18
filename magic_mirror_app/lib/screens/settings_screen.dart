@@ -15,15 +15,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _ipController = TextEditingController();
-  final _portController = TextEditingController();
   final _sshUserController = TextEditingController();
   final _sshPassController = TextEditingController();
   
   bool _saving = false;
   bool _testing = false;
   
-  String? _apiConnectionResult;
-  String? _sshConnectionResult;
+  String? _connectionResult; // 'connected' | 'failed'
 
   @override
   void initState() {
@@ -34,7 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _ipController.dispose();
-    _portController.dispose();
     _sshUserController.dispose();
     _sshPassController.dispose();
     super.dispose();
@@ -42,12 +39,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadConfig() async {
     final ip = await MirrorApiService().getSavedIp();
-    final port = await MirrorApiService().getSavedPort();
     final sshUser = await SshService().getSavedUser();
     final sshPass = await SshService().getSavedPass();
     if (mounted) {
       _ipController.text = ip;
-      _portController.text = port;
       _sshUserController.text = sshUser;
       _sshPassController.text = sshPass;
     }
@@ -56,11 +51,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveConfig() async {
     setState(() => _saving = true);
     final ip = _ipController.text.trim();
-    final port = _portController.text.trim();
     final sshUser = _sshUserController.text.trim();
     final sshPass = _sshPassController.text.trim();
     
-    await MirrorApiService().saveConfig(ip, port);
+    // A porta 8080 está agora assumida por defeito para simplicidade
+    await MirrorApiService().saveConfig(ip, '8080');
     await SshService().saveConfig(ip, sshUser, sshPass);
     
     if (mounted) {
@@ -79,29 +74,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _testConnection() async {
     setState(() { 
       _testing = true; 
-      _apiConnectionResult = null;
-      _sshConnectionResult = null;
+      _connectionResult = null;
     });
     
     final ip = _ipController.text.trim();
-    final port = _portController.text.trim();
     final sshUser = _sshUserController.text.trim();
     final sshPass = _sshPassController.text.trim();
     
-    await MirrorApiService().saveConfig(ip, port);
+    await MirrorApiService().saveConfig(ip, '8080');
     await SshService().saveConfig(ip, sshUser, sshPass);
     
-    // Test API
-    final status = await MirrorApiService().getStatus();
-    
-    // Test SSH
+    // Testamos o SSH primariamente pois é a ligação mais crítica
     final sshOk = await SshService().testConnection();
+    final apiOk = (await MirrorApiService().getStatus()).isOnline;
     
     if (mounted) {
       setState(() {
         _testing = false;
-        _apiConnectionResult = status.isOnline ? 'connected' : 'failed';
-        _sshConnectionResult = sshOk ? 'connected' : 'failed';
+        // Se pelo menos um dos dois funcionar, consideramos conectado para a UI
+        _connectionResult = (sshOk || apiOk) ? 'connected' : 'failed';
       });
     }
   }
@@ -122,10 +113,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('Configure a ligação ao Magic Mirror', style: AppTheme.bodyMedium),
               const SizedBox(height: 28),
 
-              // Network Connection Card
+              // Connection Card
               _SettingsCard(
-                title: 'Endereço de Rede',
-                icon: Icons.wifi,
+                title: 'Configuração de Ligação',
+                icon: Icons.router,
                 child: Column(
                   children: [
                     _buildField(
@@ -135,62 +126,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 14),
-                    _buildField(
-                      label: 'Porta da API (MMM-Remote-Control)',
-                      controller: _portController,
-                      hint: '8080',
-                      keyboardType: TextInputType.number,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            label: 'Username',
+                            controller: _sshUserController,
+                            hint: 'pi',
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: _buildField(
+                            label: 'Password',
+                            controller: _sshPassController,
+                            hint: 'raspberry',
+                            obscureText: true,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // SSH Connection Card
-              _SettingsCard(
-                title: 'Credenciais SSH',
-                icon: Icons.terminal,
-                child: Column(
-                  children: [
-                    _buildField(
-                      label: 'Username',
-                      controller: _sshUserController,
-                      hint: 'pi',
-                    ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      label: 'Password',
-                      controller: _sshPassController,
-                      hint: 'raspberry',
-                      obscureText: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Actions and Results
-              _SettingsCard(
-                title: 'Ações de Ligação',
-                icon: Icons.sync,
-                child: Column(
-                  children: [
-                    if (_apiConnectionResult != null || _sshConnectionResult != null) ...[
+                    const SizedBox(height: 24),
+                    
+                    if (_connectionResult != null) ...[
                       _ConnectionStatusBadge(
-                        label: 'API REST',
-                        status: _apiConnectionResult,
-                        successMessage: 'Conectado!',
-                        errorMessage: 'Falhou. Verifica IP/Porta.',
+                        status: _connectionResult,
+                        successMessage: 'Conectado com sucesso!',
+                        errorMessage: 'Falha na ligação. Verifica o IP e credenciais.',
                       ),
-                      const SizedBox(height: 10),
-                      _ConnectionStatusBadge(
-                        label: 'Terminal SSH',
-                        status: _sshConnectionResult,
-                        successMessage: 'Autenticado!',
-                        errorMessage: 'Falhou. Verifica credenciais.',
-                      ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
                     ],
+
                     Row(
                       children: [
                         Expanded(
@@ -213,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       color: AppTheme.primary,
                                     ),
                                   )
-                                : const Text('Testar Ligações',
+                                : const Text('Testar Ligação',
                                     style: TextStyle(fontWeight: FontWeight.w600)),
                           ),
                         ),
@@ -256,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _buildStep('1', 'Descobre o IP do Pi com o comando: hostname -I'),
                     _buildStep('2', 'Garante que o Pi e o telemóvel estão na mesma rede WiFi'),
-                    _buildStep('3', 'Preenche as credenciais SSH para poderes instalar módulos diretamente da App'),
+                    _buildStep('3', 'Preenche as credenciais e liga!'),
                   ],
                 ),
               ),
@@ -340,13 +306,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 class _ConnectionStatusBadge extends StatelessWidget {
-  final String label;
   final String? status; // 'connected' | 'failed' | null
   final String successMessage;
   final String errorMessage;
 
   const _ConnectionStatusBadge({
-    required this.label,
     required this.status,
     required this.successMessage,
     required this.errorMessage,
@@ -375,26 +339,13 @@ class _ConnectionStatusBadge extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  isSuccess ? successMessage : errorMessage,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: color,
-                  ),
-                ),
-              ],
+            child: Text(
+              isSuccess ? successMessage : errorMessage,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
         ],
