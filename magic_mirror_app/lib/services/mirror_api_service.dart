@@ -43,7 +43,10 @@ class MirrorApiService {
 
   // ─── Status ────────────────────────────────────────────────────────────────
 
+  /// Tenta contactar o Pi via HTTP (MMM-Remote-Control) para obter o status.
+  /// Fallback: tenta SSH. Se ambos falharem, devolve offline.
   Future<MirrorStatus> getStatus() async {
+    // Tenta HTTP (MMM-Remote-Control)
     try {
       final response = await http
           .get(Uri.parse('$_baseUrl/api/status'))
@@ -52,12 +55,26 @@ class MirrorApiService {
         return MirrorStatus.fromJson(json.decode(response.body));
       }
     } catch (_) {}
+
+    // Fallback SSH
+    final sshOk = await SshService().testConnection();
+    if (sshOk) {
+      return MirrorStatus(
+        isOnline: true,
+        wifiStrong: true,
+        isPowered: true,
+        isSynced: false,
+        activeWidgets: 0,
+        savedPresets: 0,
+      );
+    }
+
     return MirrorStatus.offline;
   }
 
   // ─── Widgets / Modules ─────────────────────────────────────────────────────
 
-  /// Busca módulos instalados no Mirror via MMM-Remote-Control.
+  /// Módulos instalados no Pi (via HTTP ou SSH fallback).
   Future<List<WidgetModel>> getModules() async {
     try {
       final response = await http
@@ -69,7 +86,6 @@ class MirrorApiService {
       }
     } catch (_) {}
 
-    // Fallback: Tentamos ler diretamente por SSH se a porta 8080 estiver bloqueada
     final sshModules = await SshService().fetchRealModules();
     if (sshModules.isNotEmpty) {
       return sshModules.map((m) => WidgetModel.fromJson(m)).toList();
@@ -78,11 +94,9 @@ class MirrorApiService {
     return demoWidgets;
   }
 
-  /// Busca o catálogo público de módulos em magicmirror.builders.
-  /// Não requer ligação ao Raspberry Pi.
+  /// Catálogo público de módulos (não requer ligação ao Pi).
   Future<List<WidgetModel>> getCatalogueModules() async {
-    const catalogueUrl =
-        'https://mmm-rest.david-van-laere.be/api/module';
+    const catalogueUrl = 'https://mmm-rest.david-van-laere.be/api/module';
     try {
       final response = await http
           .get(Uri.parse(catalogueUrl))
@@ -92,7 +106,6 @@ class MirrorApiService {
         final modules = data
             .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
             .toList();
-        // Ordenar por popularidade (estrelas) descendente
         modules.sort((a, b) => b.stars.compareTo(a.stars));
         return modules;
       }
@@ -100,47 +113,34 @@ class MirrorApiService {
     return demoWidgets;
   }
 
-  Future<bool> installModule(String moduleId) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/modules/install'),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({'id': moduleId}),
-          )
-          .timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+  // ─── Install / Remove / Update via SSH ─────────────────────────────────────
+
+  /// Instala um módulo via SSH (git clone). Requer repoUrl.
+  Future<bool> installModule(String moduleId, {String? repoUrl}) async {
+    final url = repoUrl ?? 'https://github.com/MagicMirrorOrg/$moduleId';
+    return SshService().installModule(url, moduleId);
   }
 
+  /// Remove um módulo via SSH.
   Future<bool> removeModule(String moduleId) async {
-    try {
-      final response = await http
-          .delete(Uri.parse('$_baseUrl/api/modules/$moduleId'))
-          .timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+    return SshService().removeModule(moduleId);
+  }
+
+  /// Atualiza um módulo via SSH (git pull).
+  Future<bool> updateModule(String moduleId) async {
+    return SshService().updateModule(moduleId);
   }
 
   // ─── Layout ────────────────────────────────────────────────────────────────
 
-  Future<bool> saveLayout(Map<String, String> positions) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_baseUrl/api/layout'),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({'positions': positions}),
-          )
-          .timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+  /// Guarda o layout via SSH (atualiza config.js + reinicia).
+  Future<bool> saveLayout(Map<int, Map<String, String>> pages) async {
+    return SshService().updateMagicMirrorConfig(pages);
+  }
+
+  /// Carrega o layout actual do Pi.
+  Future<Map<int, Map<String, String>>> loadLayout() async {
+    return SshService().fetchLayoutFromConfig();
   }
 
   // ─── Presets ───────────────────────────────────────────────────────────────
@@ -176,13 +176,14 @@ class MirrorApiService {
   // ─── Mirror Control ────────────────────────────────────────────────────────
 
   Future<bool> restartMirror() async {
+    // Tenta HTTP primeiro (MMM-Remote-Control)
     try {
       final response = await http
           .post(Uri.parse('$_baseUrl/api/mirror/restart'))
           .timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+      if (response.statusCode == 200) return true;
+    } catch (_) {}
+    // Fallback SSH
+    return SshService().restartMagicMirror();
   }
 }
