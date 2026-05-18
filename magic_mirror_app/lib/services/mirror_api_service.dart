@@ -52,20 +52,73 @@ class MirrorApiService {
           .get(Uri.parse('$_baseUrl/api/status'))
           .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
-        return MirrorStatus.fromJson(json.decode(response.body));
+        final data = json.decode(response.body);
+        
+        int activeCount = data['activeWidgets'] as int? ?? 0;
+        if (activeCount == 0) {
+          try {
+            final layout = await loadLayout();
+            final uniqueWidgets = <String>{};
+            for (final pageLayout in layout.values) {
+              for (final val in pageLayout.values) {
+                if (val.isNotEmpty) {
+                  uniqueWidgets.addAll(val.split(','));
+                }
+              }
+            }
+            activeCount = uniqueWidgets.length;
+          } catch (_) {}
+        }
+        
+        int presetsCount = data['savedPresets'] as int? ?? 0;
+        if (presetsCount == 0) {
+          try {
+            final presets = await getPresets();
+            presetsCount = presets.length;
+          } catch (_) {}
+        }
+
+        return MirrorStatus(
+          isOnline: true,
+          wifiStrong: data['wifi'] as bool? ?? true,
+          isPowered: data['powered'] as bool? ?? true,
+          isSynced: data['synced'] as bool? ?? true,
+          activeWidgets: activeCount,
+          savedPresets: presetsCount,
+        );
       }
     } catch (_) {}
 
     // Fallback SSH
     final sshOk = await SshService().testConnection();
     if (sshOk) {
+      int activeWidgetsCount = 0;
+      try {
+        final layout = await SshService().fetchLayoutFromConfig();
+        final uniqueWidgets = <String>{};
+        for (final pageLayout in layout.values) {
+          for (final val in pageLayout.values) {
+            if (val.isNotEmpty) {
+              uniqueWidgets.addAll(val.split(','));
+            }
+          }
+        }
+        activeWidgetsCount = uniqueWidgets.length;
+      } catch (_) {}
+
+      int presetsCount = 0;
+      try {
+        final presets = await getPresets();
+        presetsCount = presets.length;
+      } catch (_) {}
+
       return MirrorStatus(
         isOnline: true,
         wifiStrong: true,
         isPowered: true,
-        isSynced: false,
-        activeWidgets: 0,
-        savedPresets: 0,
+        isSynced: true,
+        activeWidgets: activeWidgetsCount,
+        savedPresets: presetsCount,
       );
     }
 
