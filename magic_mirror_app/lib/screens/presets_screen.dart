@@ -38,8 +38,11 @@ class _PresetsScreenState extends State<PresetsScreen> {
   }
 
   Future<void> _applyPreset(PresetModel preset) async {
+    setState(() => _loading = true);
     final success = await MirrorApiService().applyPreset(preset.id);
     if (!mounted) return;
+    setState(() => _loading = false);
+    
     if (success) {
       setState(() {
         for (final p in _presets) {
@@ -55,13 +58,262 @@ class _PresetsScreenState extends State<PresetsScreen> {
         ),
       );
     } else {
-      // Demo mode — just switch locally
-      setState(() {
-        for (final p in _presets) {
-          p.isActive = p.id == preset.id;
-        }
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Erro ao ativar preset via SSH.'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     }
+  }
+
+  Future<void> _showCreatePresetDialog() async {
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+    String selectedIcon = 'sunny';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: AppTheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Criar Novo Preset', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameController,
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'ex: Fim de Semana',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        filled: true,
+                        fillColor: AppTheme.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: descController,
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'ex: Fotos e música para relaxar',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        filled: true,
+                        fillColor: AppTheme.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildIconOption(setStateDialog, 'sunny', Icons.wb_sunny, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOption(setStateDialog, 'cloudy', Icons.wb_cloudy, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOption(setStateDialog, 'night', Icons.nightlight_round, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOption(setStateDialog, 'home', Icons.home, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOption(setStateDialog, 'music', Icons.music_note, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOption(setStateDialog, 'photo', Icons.photo, selectedIcon, (val) => selectedIcon = val),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isEmpty) return;
+                    Navigator.pop(ctx, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Criar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true && nameController.text.trim().isNotEmpty && mounted) {
+      setState(() => _loading = true);
+      final currentLayout = await MirrorApiService().loadLayout();
+      
+      int widgetCount = 0;
+      if (currentLayout.isNotEmpty) {
+        final unique = <String>{};
+        for (final page in currentLayout.values) {
+          for (final val in page.values) {
+            if (val.isNotEmpty) {
+              unique.addAll(val.split(','));
+            }
+          }
+        }
+        widgetCount = unique.length;
+      }
+
+      final newPreset = PresetModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameController.text.trim(),
+        description: descController.text.trim(),
+        widgetCount: widgetCount,
+        iconName: selectedIcon,
+        layout: currentLayout.isNotEmpty ? currentLayout : {1: {}, 2: {}, 3: {}},
+        isActive: false,
+      );
+
+      await MirrorApiService().savePreset(newPreset);
+      await _loadPresets();
+    }
+  }
+
+  Widget _buildIconOption(StateSetter setStateDialog, String iconNameOption, IconData iconData, String currentSelected, Function(String) onSelect) {
+    final isSelected = currentSelected == iconNameOption;
+    return GestureDetector(
+      onTap: () {
+        setStateDialog(() {
+          onSelect(iconNameOption);
+        });
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary.withValues(alpha: 0.15) : Colors.transparent,
+          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.border, width: isSelected ? 1.5 : 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(iconData, color: isSelected ? AppTheme.primary : AppTheme.textMuted, size: 18),
+      ),
+    );
+  }
+
+  void _showPresetOptions(PresetModel preset) {
+    final isDefault = preset.id == 'morning' || preset.id == 'afternoon' || preset.id == 'night';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  preset.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
+                ),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.copy_outlined, color: AppTheme.primary),
+                title: const Text('Sobregravar com o layout atual'),
+                subtitle: const Text('Guarda o layout que está live no espelho neste preset'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  setState(() => _loading = true);
+                  final currentLayout = await MirrorApiService().loadLayout();
+                  if (!mounted) return;
+                  if (currentLayout.isNotEmpty) {
+                    final unique = <String>{};
+                    for (final page in currentLayout.values) {
+                      for (final val in page.values) {
+                        if (val.isNotEmpty) {
+                          unique.addAll(val.split(','));
+                        }
+                      }
+                    }
+                    final updatedPreset = PresetModel(
+                      id: preset.id,
+                      name: preset.name,
+                      description: preset.description,
+                      widgetCount: unique.length,
+                      iconName: preset.iconName,
+                      layout: currentLayout,
+                      isActive: preset.isActive,
+                    );
+                    await MirrorApiService().savePreset(updatedPreset);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Preset "${preset.name}" sobregravado com o layout atual!'),
+                        backgroundColor: AppTheme.success,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Não foi possível obter o layout do espelho.'),
+                        backgroundColor: AppTheme.error,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  }
+                  await _loadPresets();
+                },
+              ),
+              if (!isDefault)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: AppTheme.error),
+                  title: const Text('Eliminar Preset', style: TextStyle(color: AppTheme.error)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    setState(() => _loading = true);
+                    await MirrorApiService().deletePreset(preset.id);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Preset "${preset.name}" eliminado!'),
+                        backgroundColor: AppTheme.success,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                    await _loadPresets();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -89,17 +341,20 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             children: const [
                               Text('Presets', style: AppTheme.headingLarge),
                               SizedBox(height: 4),
-                              Text('Save and switch between layouts', style: AppTheme.bodyMedium),
+                              Text('Guarde e alterne entre layouts', style: AppTheme.bodyMedium),
                             ],
                           ),
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary,
-                              borderRadius: BorderRadius.circular(12),
+                          GestureDetector(
+                            onTap: _showCreatePresetDialog,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.add, color: Colors.white),
                             ),
-                            child: const Icon(Icons.add, color: Colors.white),
                           ),
                         ],
                       ),
@@ -107,7 +362,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
                       // Active Preset card
                       if (_activePreset != null) ...[
-                        const Text('Active Preset', style: TextStyle(
+                        const Text('Preset Ativo', style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textSecondary,
@@ -118,7 +373,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                       ],
 
                       // All Presets
-                      const Text('All Presets', style: TextStyle(
+                      const Text('Todos os Presets', style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textSecondary,
@@ -127,6 +382,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                       ..._presets.map((p) => _PresetListItem(
                             preset: p,
                             onSwitch: p.isActive ? null : () => _applyPreset(p),
+                            onMore: () => _showPresetOptions(p),
                           )),
                     ],
                   ),
@@ -178,7 +434,7 @@ class _ActivePresetCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
-                  'Active',
+                  'Ativo',
                   style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -196,7 +452,7 @@ class _ActivePresetCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '${preset.widgetCount} widgets configured',
+            '${preset.widgetCount} widgets configurados',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
           ),
         ],
@@ -210,8 +466,9 @@ class _ActivePresetCard extends StatelessWidget {
 class _PresetListItem extends StatelessWidget {
   final PresetModel preset;
   final VoidCallback? onSwitch;
+  final VoidCallback? onMore;
 
-  const _PresetListItem({required this.preset, this.onSwitch});
+  const _PresetListItem({required this.preset, this.onSwitch, this.onMore});
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +517,7 @@ class _PresetListItem extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 20),
-                onPressed: () {},
+                onPressed: onMore,
               ),
             ],
           ),
@@ -277,7 +534,7 @@ class _PresetListItem extends StatelessWidget {
                   foregroundColor: AppTheme.textPrimary,
                 ),
                 child: const Text(
-                  'Switch to this preset',
+                  'Ativar este preset',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),

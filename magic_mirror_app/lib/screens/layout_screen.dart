@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/widget_model.dart';
+import '../models/preset_model.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 
@@ -266,6 +267,269 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _saveAsPreset() async {
+    setState(() => _saving = true);
+    final presets = await MirrorApiService().getPresets();
+    if (mounted) setState(() => _saving = false);
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Guardar como Preset',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textPrimary),
+                ),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.add_box_outlined, color: AppTheme.primary),
+                title: const Text('Criar Novo Preset'),
+                subtitle: const Text('Cria um preset personalizado com este layout'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCreatePresetFromLayoutDialog();
+                },
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Text(
+                  'Ou sobregravar um preset existente:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                ),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: presets.length,
+                  itemBuilder: (context, index) {
+                    final preset = presets[index];
+                    return ListTile(
+                      leading: Icon(preset.icon, color: AppTheme.primary),
+                      title: Text(preset.name),
+                      subtitle: Text(preset.description),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _overwritePresetWithCurrentLayout(preset);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _overwritePresetWithCurrentLayout(PresetModel preset) async {
+    setState(() => _saving = true);
+
+    final unique = <String>{};
+    for (final page in _layouts.values) {
+      for (final val in page.values) {
+        if (val.isNotEmpty) {
+          unique.addAll(val.split(','));
+        }
+      }
+    }
+
+    final updated = PresetModel(
+      id: preset.id,
+      name: preset.name,
+      description: preset.description,
+      widgetCount: unique.length,
+      iconName: preset.iconName,
+      layout: Map<int, Map<String, String>>.from(_layouts),
+      isActive: preset.isActive,
+    );
+
+    await MirrorApiService().savePreset(updated);
+    if (mounted) setState(() => _saving = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Preset "${preset.name}" atualizado com o layout atual!'),
+          backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showCreatePresetFromLayoutDialog() async {
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+    String selectedIcon = 'sunny';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: AppTheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Criar Preset do Layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameController,
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'ex: Fim de Semana',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        filled: true,
+                        fillColor: AppTheme.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: descController,
+                      style: const TextStyle(color: AppTheme.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'ex: Fotos e música para relaxar',
+                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        filled: true,
+                        fillColor: AppTheme.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildIconOptionForLayout(setStateDialog, 'sunny', Icons.wb_sunny, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOptionForLayout(setStateDialog, 'cloudy', Icons.wb_cloudy, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOptionForLayout(setStateDialog, 'night', Icons.nightlight_round, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOptionForLayout(setStateDialog, 'home', Icons.home, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOptionForLayout(setStateDialog, 'music', Icons.music_note, selectedIcon, (val) => selectedIcon = val),
+                        _buildIconOptionForLayout(setStateDialog, 'photo', Icons.photo, selectedIcon, (val) => selectedIcon = val),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isEmpty) return;
+                    Navigator.pop(ctx, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Criar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true && nameController.text.trim().isNotEmpty && mounted) {
+      setState(() => _saving = true);
+
+      final unique = <String>{};
+      for (final page in _layouts.values) {
+        for (final val in page.values) {
+          if (val.isNotEmpty) {
+            unique.addAll(val.split(','));
+          }
+        }
+      }
+
+      final newPreset = PresetModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameController.text.trim(),
+        description: descController.text.trim(),
+        widgetCount: unique.length,
+        iconName: selectedIcon,
+        layout: Map<int, Map<String, String>>.from(_layouts),
+        isActive: false,
+      );
+
+      await MirrorApiService().savePreset(newPreset);
+      if (mounted) setState(() => _saving = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Preset "${newPreset.name}" criado com sucesso!'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildIconOptionForLayout(StateSetter setStateDialog, String iconNameOption, IconData iconData, String currentSelected, Function(String) onSelect) {
+    final isSelected = currentSelected == iconNameOption;
+    return GestureDetector(
+      onTap: () {
+        setStateDialog(() {
+          onSelect(iconNameOption);
+        });
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary.withValues(alpha: 0.15) : Colors.transparent,
+          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.border, width: isSelected ? 1.5 : 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(iconData, color: isSelected ? AppTheme.primary : AppTheme.textMuted, size: 18),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -304,6 +568,11 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                             onPressed: _loadAll,
                             icon: const Icon(Icons.refresh, color: AppTheme.textMuted),
                             tooltip: 'Recarregar do Pi',
+                          ),
+                          IconButton(
+                            onPressed: _saveAsPreset,
+                            icon: const Icon(Icons.bookmark_add_outlined, color: AppTheme.primary),
+                            tooltip: 'Guardar como Preset',
                           ),
                           if (_saving)
                             const SizedBox(

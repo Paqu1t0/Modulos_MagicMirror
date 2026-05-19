@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -491,7 +490,7 @@ console.log(JSON.stringify({ ok: true }));
   // ─── Instalar / Remover / Atualizar ────────────────────────────────────────
 
   Future<bool> installModule(String repoUrl, String moduleName) async {
-    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final check =
         await executeCommand('[ -d "$dir" ] && echo exists || echo notfound');
     if (check != null && check.trim() == 'exists') return true;
@@ -506,13 +505,13 @@ console.log(JSON.stringify({ ok: true }));
   }
 
   Future<bool> removeModule(String moduleName) async {
-    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final result = await executeCommand('rm -rf "$dir" && echo RM_OK');
     return result != null && result.contains('RM_OK');
   }
 
   Future<bool> updateModule(String moduleName) async {
-    final dir = r'$HOME' + '/MagicMirror/modules/$moduleName';
+    final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final result =
         await executeCommand('cd "$dir" && git pull 2>&1 && echo GIT_DONE');
     if (result == null || !result.contains('GIT_DONE')) return false;

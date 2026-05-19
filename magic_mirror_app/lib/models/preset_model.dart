@@ -5,7 +5,8 @@ class PresetModel {
   final String name;
   final String description;
   final int widgetCount;
-  final IconData icon;
+  final String iconName;
+  final Map<int, Map<String, String>>? layout;
   bool isActive;
 
   PresetModel({
@@ -13,17 +14,57 @@ class PresetModel {
     required this.name,
     required this.description,
     required this.widgetCount,
-    required this.icon,
+    required this.iconName,
+    this.layout,
     this.isActive = false,
   });
 
+  IconData get icon {
+    switch (iconName) {
+      case 'sunny':
+      case 'morning':
+        return Icons.wb_sunny;
+      case 'cloudy':
+      case 'afternoon':
+        return Icons.wb_cloudy;
+      case 'night':
+        return Icons.nightlight_round;
+      case 'home':
+        return Icons.home;
+      case 'work':
+        return Icons.work;
+      case 'music':
+        return Icons.music_note;
+      case 'photo':
+        return Icons.photo;
+      default:
+        return Icons.dashboard;
+    }
+  }
+
   factory PresetModel.fromJson(Map<String, dynamic> json) {
+    Map<int, Map<String, String>>? parsedLayout;
+    if (json['layout'] != null) {
+      try {
+        final rawLayout = json['layout'] as Map<String, dynamic>;
+        parsedLayout = rawLayout.map((key, value) {
+          final pageNum = int.tryParse(key) ?? 1;
+          final posMap = Map<String, dynamic>.from(value as Map);
+          return MapEntry(
+            pageNum,
+            posMap.map((k, v) => MapEntry(k, v.toString())),
+          );
+        });
+      } catch (_) {}
+    }
+
     return PresetModel(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       widgetCount: json['widgetCount'] as int? ?? 0,
-      icon: Icons.dashboard,
+      iconName: json['iconName'] as String? ?? 'dashboard',
+      layout: parsedLayout,
       isActive: json['active'] as bool? ?? false,
     );
   }
@@ -33,41 +74,52 @@ class PresetModel {
         'name': name,
         'description': description,
         'widgetCount': widgetCount,
+        'iconName': iconName,
+        'layout': layout?.map((k, v) => MapEntry(k.toString(), v)),
         'active': isActive,
       };
 }
 
-final List<PresetModel> demoPresets = [
+final List<PresetModel> defaultPresets = [
   PresetModel(
     id: 'morning',
     name: 'Morning Routine',
     description: 'Weather, calendar, and news for your morning',
-    widgetCount: 8,
-    icon: Icons.wb_sunny,
+    widgetCount: 5,
+    iconName: 'sunny',
     isActive: true,
+    layout: {
+      1: {'Top Left': 'clock', 'Top Right': 'weather', 'Bottom Center': 'news'},
+      2: {'Center': 'calendar'},
+      3: {'Bottom Right': 'photos'},
+    },
   ),
   PresetModel(
-    id: 'weekend',
-    name: 'Weekend Mode',
+    id: 'afternoon',
+    name: 'Afternoon Mode',
     description: 'Relaxed layout with photos and music',
     widgetCount: 5,
-    icon: Icons.home,
+    iconName: 'cloudy',
     isActive: false,
-  ),
-  PresetModel(
-    id: 'work',
-    name: 'Work Focus',
-    description: 'Calendar, email, and productivity widgets',
-    widgetCount: 6,
-    icon: Icons.work,
-    isActive: false,
+    layout: {
+      1: {'Top Left': 'clock', 'Top Center': 'music', 'Bottom Center': 'news'},
+      2: {'Center': 'photos'},
+      3: {'Bottom Right': 'fitness'},
+    },
   ),
   PresetModel(
     id: 'night',
     name: 'Night Time',
     description: 'Minimal display with clock and ambient info',
-    widgetCount: 3,
-    icon: Icons.nightlight_round,
+    widgetCount: 2,
+    iconName: 'night',
     isActive: false,
+    layout: {
+      1: {'Top Center': 'clock'},
+      2: {'Center': 'weather'},
+      3: {},
+    },
   ),
 ];
+
+final List<PresetModel> demoPresets = defaultPresets;

@@ -200,18 +200,45 @@ class MirrorApiService {
 
   Future<List<PresetModel>> getPresets() async {
     try {
-      final response = await http
-          .get(Uri.parse('$_baseUrl/api/presets'))
-          .timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+      final prefs = await SharedPreferences.getInstance();
+      final savedStr = prefs.getString('saved_presets');
+      if (savedStr != null && savedStr.isNotEmpty) {
+        final List<dynamic> data = json.decode(savedStr);
         return data.map((e) => PresetModel.fromJson(e)).toList();
       }
     } catch (_) {}
-    return demoPresets;
+
+    // Inicializar os presets padrão se não existirem localmente
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_presets', json.encode(defaultPresets.map((p) => p.toJson()).toList()));
+    } catch (_) {}
+
+    return defaultPresets;
   }
 
   Future<bool> applyPreset(String presetId) async {
+    final presets = await getPresets();
+    PresetModel? preset;
+    try {
+      preset = presets.firstWhere((p) => p.id == presetId);
+    } catch (_) {}
+
+    if (preset != null && preset.layout != null && preset.layout!.isNotEmpty) {
+      final success = await saveLayout(preset.layout!);
+      if (success) {
+        for (final p in presets) {
+          p.isActive = (p.id == presetId);
+        }
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+        } catch (_) {}
+        return true;
+      }
+      return false;
+    }
+
     try {
       final response = await http
           .post(
@@ -220,10 +247,41 @@ class MirrorApiService {
             body: json.encode({'id': presetId}),
           )
           .timeout(const Duration(seconds: 10));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+      if (response.statusCode == 200) {
+        for (final p in presets) {
+          p.isActive = (p.id == presetId);
+        }
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+        } catch (_) {}
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> savePreset(PresetModel preset) async {
+    final presets = await getPresets();
+    final index = presets.indexWhere((p) => p.id == preset.id);
+    if (index != -1) {
+      presets[index] = preset;
+    } else {
+      presets.add(preset);
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  Future<void> deletePreset(String presetId) async {
+    final presets = await getPresets();
+    presets.removeWhere((p) => p.id == presetId);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+    } catch (_) {}
   }
 
   // ─── Mirror Control ────────────────────────────────────────────────────────
