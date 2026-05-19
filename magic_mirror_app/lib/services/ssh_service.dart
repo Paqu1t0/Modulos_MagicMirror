@@ -114,6 +114,88 @@ class SshService {
     return result != null;
   }
 
+  Future<bool> setMonitorPower(bool turnOn) async {
+    final cmd = turnOn
+        ? 'export DISPLAY=:0 && (xset dpms force on || vcgencmd display_power 1 || wlr-randr --output HDMI-A-1 --on)'
+        : 'export DISPLAY=:0 && (xset dpms force off || vcgencmd display_power 0 || wlr-randr --output HDMI-A-1 --off)';
+    final result = await executeCommand(cmd);
+    return result != null;
+  }
+
+  Future<bool> updatePowerCronSchedule({
+    required bool enabled,
+    required String offHour,
+    required String offMinute,
+    required String onHour,
+    required String onMinute,
+  }) async {
+    try {
+      final currentCron = await executeCommand('crontab -l 2>/dev/null || echo ""');
+      String cronContent = currentCron ?? '';
+
+      final startTag = '# MAGIC_MIRROR_POWER_START';
+      final endTag = '# MAGIC_MIRROR_POWER_END';
+
+      final String newBlock;
+      if (enabled) {
+        final offCronCmd = '$offMinute $offHour * * * export DISPLAY=:0 && (xset dpms force off || vcgencmd display_power 0 || wlr-randr --output HDMI-A-1 --off)';
+        final onCronCmd = '$onMinute $onHour * * * export DISPLAY=:0 && (xset dpms force on || vcgencmd display_power 1 || wlr-randr --output HDMI-A-1 --on)';
+        newBlock = '$startTag\n$offCronCmd\n$onCronCmd\n$endTag';
+      } else {
+        newBlock = '';
+      }
+
+      if (cronContent.contains(startTag) && cronContent.contains(endTag)) {
+        final startIndex = cronContent.indexOf(startTag);
+        final endIndex = cronContent.indexOf(endTag) + endTag.length;
+        
+        final before = cronContent.substring(0, startIndex);
+        final after = cronContent.substring(endIndex);
+        
+        cronContent = '${before.trimRight()}\n\n$newBlock\n\n${after.trimLeft()}';
+      } else {
+        cronContent = '${cronContent.trimRight()}\n\n$newBlock\n';
+      }
+
+      cronContent = '${cronContent.trim()}\n';
+
+      if (cronContent.trim().isEmpty) {
+        await executeCommand('crontab -r 2>/dev/null || true');
+        return true;
+      }
+
+      final encodedContent = base64Encode(utf8.encode(cronContent));
+      final updateCmd = 'echo "$encodedContent" | base64 -d | crontab -';
+      final result = await executeCommand(updateCmd);
+      return result != null;
+    } catch (e) {
+      debugPrint('updatePowerCronSchedule Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> saveUltrasonicConfig({
+    required double distanceLimit,
+    required int activeSeconds,
+  }) async {
+    final configMap = {
+      'DISTANCIA_LIMITE': distanceLimit,
+      'TEMPO_PARA_DESLIGAR': activeSeconds,
+    };
+    final configJson = json.encode(configMap);
+    
+    final path = '\$HOME/MagicMirror/modules/MMM-Ultrasonic/config.json';
+    final base64Content = base64Encode(utf8.encode(configJson));
+    final cmd = 'echo "$base64Content" | base64 -d > $path && echo "WRITE_OK"';
+    
+    final result = await executeCommand(cmd);
+    if (result == null || !result.contains('WRITE_OK')) {
+      return false;
+    }
+    
+    return await restartMagicMirror();
+  }
+
   Future<bool> restartMagicMirror() async {
     // Tenta pm2 primeiro, depois systemctl, depois npm start
     for (final cmd in [

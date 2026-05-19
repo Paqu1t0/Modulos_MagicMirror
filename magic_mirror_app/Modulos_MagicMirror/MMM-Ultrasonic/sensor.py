@@ -10,6 +10,21 @@ TRIG = 23
 ECHO = 24
 DISTANCIA_LIMITE = 150.0 # 1.5 metros = 150 cm
 PORTA_HDMI = "HDMI-A-1"  
+TEMPO_PARA_DESLIGAR = 5 # Tempo padrão em segundos
+
+# Carregar do config.json se existir
+try:
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+            if 'DISTANCIA_LIMITE' in config_data:
+                DISTANCIA_LIMITE = float(config_data['DISTANCIA_LIMITE'])
+            if 'TEMPO_PARA_DESLIGAR' in config_data:
+                TEMPO_PARA_DESLIGAR = int(config_data['TEMPO_PARA_DESLIGAR'])
+except Exception as e:
+    sys.stderr.write("Erro ao carregar config.json: " + str(e) + "\n")
+
 
 # --- Truque para funcionar no Raspberry Pi 5 (Wayland) ---
 my_env = os.environ.copy()
@@ -63,8 +78,6 @@ def desligar_ecra():
 
 # --- Lógica Principal ---
 if __name__ == '__main__':
-    TEMPO_PARA_DESLIGAR = 5 
-    
     GPIO.gpio_write(h, TRIG, 0)
     time.sleep(2) 
     
