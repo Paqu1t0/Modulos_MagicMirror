@@ -8,8 +8,9 @@ import '../widgets/bottom_nav_bar.dart';
 
 class LayoutScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
+  final PresetModel? presetToEdit;
 
-  const LayoutScreen({super.key, required this.onNavigate});
+  const LayoutScreen({super.key, required this.onNavigate, this.presetToEdit});
 
   @override
   State<LayoutScreen> createState() => _LayoutScreenState();
@@ -49,7 +50,9 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     // Carregar widgets instalados e layout em paralelo
     final results = await Future.wait([
       MirrorApiService().getModules(),
-      MirrorApiService().loadLayout(),
+      widget.presetToEdit != null
+          ? Future.value(<int, Map<String, String>>{})
+          : MirrorApiService().loadLayout(),
     ]);
 
     final modules = results[0] as List<WidgetModel>;
@@ -59,7 +62,18 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
       setState(() {
         _installedWidgets = modules.where((w) => w.isInstalled).toList();
 
-        if (layout.isNotEmpty) {
+        if (widget.presetToEdit != null) {
+          final presetLayout = widget.presetToEdit!.layout;
+          if (presetLayout != null && presetLayout.isNotEmpty) {
+            _layouts = {
+              1: Map<String, String>.from(presetLayout[1] ?? {}),
+              2: Map<String, String>.from(presetLayout[2] ?? {}),
+              3: Map<String, String>.from(presetLayout[3] ?? {}),
+            };
+          } else {
+            _layouts = {1: {}, 2: {}, 3: {}};
+          }
+        } else if (layout.isNotEmpty) {
           // Layout real do Pi
           _layouts = {
             1: Map<String, String>.from(layout[1] ?? {}),
@@ -251,19 +265,55 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
   Future<void> _saveLayout() async {
     setState(() => _saving = true);
-    final success = await MirrorApiService().saveLayout(_layouts);
-    if (mounted) setState(() => _saving = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success
-              ? 'Layouts guardados! Espelho a reiniciar...'
-              : 'Erro ao atualizar as páginas via SSH.'),
-          backgroundColor: success ? AppTheme.success : AppTheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
+    
+    if (widget.presetToEdit != null) {
+      final unique = <String>{};
+      for (final page in _layouts.values) {
+        for (final val in page.values) {
+          if (val.isNotEmpty) {
+            unique.addAll(val.split(','));
+          }
+        }
+      }
+      
+      final updated = PresetModel(
+        id: widget.presetToEdit!.id,
+        name: widget.presetToEdit!.name,
+        description: widget.presetToEdit!.description,
+        widgetCount: unique.length,
+        iconName: widget.presetToEdit!.iconName,
+        layout: Map<int, Map<String, String>>.from(_layouts),
+        isActive: widget.presetToEdit!.isActive,
       );
+      
+      await MirrorApiService().savePreset(updated);
+      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Preset "${widget.presetToEdit!.name}" guardado com sucesso!'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } else {
+      final success = await MirrorApiService().saveLayout(_layouts);
+      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success
+                ? 'Layouts guardados! Espelho a reiniciar...'
+                : 'Erro ao atualizar as páginas via SSH.'),
+            backgroundColor: success ? AppTheme.success : AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
@@ -547,14 +597,28 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      if (widget.presetToEdit != null) ...[
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+                          onPressed: () => Navigator.of(context).pop(),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('Layout Editor', style: AppTheme.headingLarge),
-                            SizedBox(height: 4),
+                          children: [
                             Text(
-                              'Toca num slot para adicionar um widget',
+                              widget.presetToEdit != null ? 'Editar Preset' : 'Layout Editor',
+                              style: AppTheme.headingLarge,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.presetToEdit != null
+                                  ? 'Preset: ${widget.presetToEdit!.name}'
+                                  : 'Toca num slot para adicionar um widget',
                               style: AppTheme.bodyMedium,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -564,16 +628,18 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: _loadAll,
-                            icon: const Icon(Icons.refresh, color: AppTheme.textMuted),
-                            tooltip: 'Recarregar do Pi',
-                          ),
-                          IconButton(
-                            onPressed: _saveAsPreset,
-                            icon: const Icon(Icons.bookmark_add_outlined, color: AppTheme.primary),
-                            tooltip: 'Guardar como Preset',
-                          ),
+                          if (widget.presetToEdit == null)
+                            IconButton(
+                              onPressed: _loadAll,
+                              icon: const Icon(Icons.refresh, color: AppTheme.textMuted),
+                              tooltip: 'Recarregar do Pi',
+                            ),
+                          if (widget.presetToEdit == null)
+                            IconButton(
+                              onPressed: _saveAsPreset,
+                              icon: const Icon(Icons.bookmark_add_outlined, color: AppTheme.primary),
+                              tooltip: 'Guardar como Preset',
+                            ),
                           if (_saving)
                             const SizedBox(
                               width: 24, height: 24,
@@ -583,7 +649,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                             IconButton(
                               onPressed: _saveLayout,
                               icon: const Icon(Icons.save_outlined, color: AppTheme.primary),
-                              tooltip: 'Guardar layouts',
+                              tooltip: widget.presetToEdit != null ? 'Guardar Preset' : 'Guardar layouts',
                             ),
                         ],
                       ),
@@ -623,10 +689,12 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
           ],
         ),
       ),
-      bottomNavigationBar: MirrorBottomNavBar(
-        currentIndex: 2,
-        onTap: widget.onNavigate,
-      ),
+      bottomNavigationBar: widget.presetToEdit != null
+          ? null
+          : MirrorBottomNavBar(
+              currentIndex: 2,
+              onTap: widget.onNavigate,
+            ),
     );
   }
 

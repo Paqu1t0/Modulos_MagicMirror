@@ -3,6 +3,7 @@ import '../app_theme.dart';
 import '../models/preset_model.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
+import 'layout_screen.dart';
 
 class PresetsScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
@@ -208,41 +209,70 @@ class _PresetsScreenState extends State<PresetsScreen> {
     );
   }
 
-  void _showPresetOptions(PresetModel preset) {
+  Future<void> _editPresetLayout(PresetModel preset) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LayoutScreen(
+          onNavigate: widget.onNavigate,
+          presetToEdit: preset,
+        ),
+      ),
+    );
+    if (result == true) {
+      await _loadPresets();
+    }
+  }
+
+  void _showPresetOptionsDialog(PresetModel preset) {
     final isDefault = preset.id == 'morning' || preset.id == 'afternoon' || preset.id == 'night';
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            preset.name,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppTheme.border,
-                  borderRadius: BorderRadius.circular(2),
+              Text(
+                preset.description,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 14,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Text(
-                  preset.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
+              const SizedBox(height: 6),
+              Text(
+                '${preset.widgetCount} widgets configurados',
+                style: const TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 12,
                 ),
               ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.copy_outlined, color: AppTheme.primary),
-                title: const Text('Sobregravar com o layout atual'),
-                subtitle: const Text('Guarda o layout que está live no espelho neste preset'),
+              const SizedBox(height: 20),
+              const Text(
+                'Opções do Preset:',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 10),
+              
+              // Option 1: Overwrite with Live Layout
+              InkWell(
                 onTap: () async {
                   Navigator.pop(ctx);
                   setState(() => _loading = true);
@@ -270,7 +300,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Preset "${preset.name}" sobregravado com o layout atual!'),
+                        content: Text('Preset "${preset.name}" sobregravado com o layout live!'),
                         backgroundColor: AppTheme.success,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -288,11 +318,49 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   }
                   await _loadPresets();
                 },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppTheme.border),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.copy_outlined, color: AppTheme.primary, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Sobregravar com o layout live',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Guarda o layout do espelho neste preset',
+                              style: TextStyle(
+                                color: AppTheme.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              if (!isDefault)
-                ListTile(
-                  leading: const Icon(Icons.delete_outline, color: AppTheme.error),
-                  title: const Text('Eliminar Preset', style: TextStyle(color: AppTheme.error)),
+              
+              if (!isDefault) ...[
+                const SizedBox(height: 12),
+                // Option 2: Delete Preset
+                InkWell(
                   onTap: () async {
                     Navigator.pop(ctx);
                     setState(() => _loading = true);
@@ -308,11 +376,43 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     );
                     await _loadPresets();
                   },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(8),
+                      color: AppTheme.error.withValues(alpha: 0.05),
+                    ),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.delete_outline, color: AppTheme.error, size: 20),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Eliminar Preset',
+                            style: TextStyle(
+                              color: AppTheme.error,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+              ],
             ],
           ),
-        ),
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fechar', style: TextStyle(color: AppTheme.textMuted)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -368,7 +468,11 @@ class _PresetsScreenState extends State<PresetsScreen> {
                           color: AppTheme.textSecondary,
                         )),
                         const SizedBox(height: 10),
-                        _ActivePresetCard(preset: _activePreset!),
+                        _ActivePresetCard(
+                          preset: _activePreset!,
+                          onTap: () => _editPresetLayout(_activePreset!),
+                          onLongPress: () => _showPresetOptionsDialog(_activePreset!),
+                        ),
                         const SizedBox(height: 28),
                       ],
 
@@ -382,7 +486,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
                       ..._presets.map((p) => _PresetListItem(
                             preset: p,
                             onSwitch: p.isActive ? null : () => _applyPreset(p),
-                            onMore: () => _showPresetOptions(p),
+                            onTap: () => _editPresetLayout(p),
+                            onLongPress: () => _showPresetOptionsDialog(p),
                           )),
                     ],
                   ),
@@ -401,61 +506,72 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
 class _ActivePresetCard extends StatelessWidget {
   final PresetModel preset;
-  const _ActivePresetCard({required this.preset});
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _ActivePresetCard({
+    required this.preset,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppTheme.presetActiveGradient,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: AppTheme.presetActiveGradient,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(preset.icon, color: Colors.white, size: 22),
                 ),
-                child: Icon(preset.icon, color: Colors.white, size: 22),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Ativo',
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ),
-                child: const Text(
-                  'Ativo',
-                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            preset.name,
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            preset.description,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${preset.widgetCount} widgets configurados',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              preset.name,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              preset.description,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${preset.widgetCount} widgets configurados',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -466,81 +582,87 @@ class _ActivePresetCard extends StatelessWidget {
 class _PresetListItem extends StatelessWidget {
   final PresetModel preset;
   final VoidCallback? onSwitch;
-  final VoidCallback? onMore;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
-  const _PresetListItem({required this.preset, this.onSwitch, this.onMore});
+  const _PresetListItem({
+    required this.preset,
+    this.onSwitch,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: preset.isActive ? AppTheme.primaryLight : AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.3) : AppTheme.border,
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: preset.isActive ? AppTheme.primaryLight : AppTheme.cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.3) : AppTheme.border,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.iconBg,
-                  borderRadius: BorderRadius.circular(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: preset.isActive ? AppTheme.primary.withValues(alpha: 0.15) : AppTheme.iconBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(preset.icon,
+                      color: preset.isActive ? AppTheme.primary : AppTheme.textSecondary,
+                      size: 20),
                 ),
-                child: Icon(preset.icon,
-                    color: preset.isActive ? AppTheme.primary : AppTheme.textSecondary,
-                    size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(preset.name, style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    )),
-                    const SizedBox(height: 3),
-                    Text(preset.description, style: AppTheme.bodySmall, maxLines: 2),
-                    const SizedBox(height: 3),
-                    Text('${preset.widgetCount} widgets', style: AppTheme.bodySmall),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(preset.name, style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      )),
+                      const SizedBox(height: 3),
+                      Text(preset.description, style: AppTheme.bodySmall, maxLines: 2),
+                      const SizedBox(height: 3),
+                      Text('${preset.widgetCount} widgets', style: AppTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.more_vert, color: AppTheme.textMuted, size: 20),
-                onPressed: onMore,
+              ],
+            ),
+            if (!preset.isActive && onSwitch != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: onSwitch,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: const BorderSide(color: AppTheme.border),
+                    foregroundColor: AppTheme.textPrimary,
+                  ),
+                  child: const Text(
+                    'Ativar este preset',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ),
             ],
-          ),
-          if (!preset.isActive && onSwitch != null) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: onSwitch,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  side: const BorderSide(color: AppTheme.border),
-                  foregroundColor: AppTheme.textPrimary,
-                ),
-                child: const Text(
-                  'Ativar este preset',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
