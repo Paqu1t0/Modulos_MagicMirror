@@ -12,6 +12,8 @@ class SshService {
   String _user = 'pi';
   String _pass = 'raspberry';
 
+  static bool isTesting = false;
+
   static final SshService _instance = SshService._internal();
   factory SshService() => _instance;
   SshService._internal();
@@ -55,6 +57,9 @@ class SshService {
   }
 
   Future<SSHClient> _connect() async {
+    if (isTesting) {
+      throw Exception('SSH socket connections disabled in automated testing environment.');
+    }
     final socket = await SSHSocket.connect(_ip, 22,
         timeout: const Duration(seconds: 8));
     return SSHClient(
