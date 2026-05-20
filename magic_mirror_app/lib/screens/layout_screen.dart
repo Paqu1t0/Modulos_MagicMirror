@@ -138,11 +138,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
           _installedWidgets = modules.where((w) => w.isInstalled).toList();
           final presetLayout = widget.presetToEdit!.layout;
           if (presetLayout != null && presetLayout.isNotEmpty) {
-            _layouts = {
-              1: Map<String, String>.from(presetLayout[1] ?? {}),
-              2: Map<String, String>.from(presetLayout[2] ?? {}),
-              3: Map<String, String>.from(presetLayout[3] ?? {}),
-            };
+            _layouts = MirrorApiService().deduplicateLayout(presetLayout);
           } else {
             _layouts = {1: {}, 2: {}, 3: {}};
           }
@@ -181,11 +177,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
         if (activePreset != null) {
           // Usar o layout do preset ativo
-          _layouts = {
-            1: Map<String, String>.from(activePreset.layout![1] ?? {}),
-            2: Map<String, String>.from(activePreset.layout![2] ?? {}),
-            3: Map<String, String>.from(activePreset.layout![3] ?? {}),
-          };
+          _layouts = MirrorApiService().deduplicateLayout(activePreset.layout!);
         } else if (liveLayout.isNotEmpty) {
           // Layout real do Pi (sem preset ativo ou preset sem layout)
           _layouts = {

@@ -125,26 +125,119 @@ class MirrorApiService {
     return MirrorStatus.offline;
   }
 
-  // ─── Widgets / Modules ─────────────────────────────────────────────────────
+  List<WidgetModel> _deduplicateModules(List<WidgetModel> modules) {
+    final Map<String, int> counts = {};
+    final List<WidgetModel> result = [];
+    
+    for (final w in modules) {
+      final id = w.id;
+      
+      // Aplicar a deduplicação APENAS ao módulo "weather"
+      if (id == 'weather') {
+        final count = counts[id] ?? 0;
+        counts[id] = count + 1;
+        
+        if (count == 0) {
+          result.add(WidgetModel(
+            id: id,
+            name: 'Weather (Tempo Atual)',
+            description: w.description,
+            category: w.category,
+            icon: w.icon,
+            author: w.author,
+            repoUrl: w.repoUrl,
+            stars: w.stars,
+            isInstalled: w.isInstalled,
+            position: w.position,
+          ));
+        } else {
+          final instanceName = count == 1 ? 'Weather (Previsão 7 Dias)' : 'Weather (Instância ${count + 1})';
+          result.add(WidgetModel(
+            id: '$id#$count',
+            name: instanceName,
+            description: w.description,
+            category: w.category,
+            icon: w.icon,
+            author: w.author,
+            repoUrl: w.repoUrl,
+            stars: w.stars,
+            isInstalled: w.isInstalled,
+            position: w.position,
+          ));
+        }
+      } else {
+        // Outros módulos mantêm-se inalterados
+        result.add(w);
+      }
+    }
+    return result;
+  }
+
+  Map<int, Map<String, String>> deduplicateLayout(Map<int, Map<String, String>> layout) {
+    final Map<String, int> counts = {};
+    final Map<int, Map<String, String>> result = {};
+    
+    for (int page = 1; page <= 3; page++) {
+      final pageMap = layout[page] ?? {};
+      final newPageMap = <String, String>{};
+      
+      for (final entry in pageMap.entries) {
+        final pos = entry.key;
+        final widgets = entry.value.split(',');
+        final newWidgets = <String>[];
+        
+        for (final widgetId in widgets) {
+          if (widgetId.isEmpty) continue;
+          
+          final cleanId = widgetId.split('#')[0];
+          
+          // Aplicar deduplicação APENAS ao "weather"
+          if (cleanId == 'weather') {
+            final count = counts[cleanId] ?? 0;
+            counts[cleanId] = count + 1;
+            
+            if (count == 0) {
+              newWidgets.add(cleanId);
+            } else {
+              newWidgets.add('$cleanId#$count');
+            }
+          } else {
+            // Outros módulos usam o ID limpo normal
+            newWidgets.add(cleanId);
+          }
+        }
+        newPageMap[pos] = newWidgets.join(',');
+      }
+      result[page] = newPageMap;
+    }
+    return result;
+  }
 
   /// Módulos instalados no Pi (via HTTP ou SSH fallback).
   Future<List<WidgetModel>> getModules() async {
+    List<WidgetModel> rawModules = [];
     try {
       final response = await http
           .get(Uri.parse('$_baseUrl/api/modules'))
           .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        return data.map((e) => WidgetModel.fromJson(e)).toList();
+        rawModules = data.map((e) => WidgetModel.fromJson(e)).toList();
       }
     } catch (_) {}
 
-    final sshModules = await SshService().fetchRealModules();
-    if (sshModules.isNotEmpty) {
-      return sshModules.map((m) => WidgetModel.fromJson(m)).toList();
+    if (rawModules.isEmpty) {
+      final sshModules = await SshService().fetchRealModules();
+      if (sshModules.isNotEmpty) {
+        rawModules = sshModules.map((m) => WidgetModel.fromJson(m)).toList();
+      }
     }
 
-    return demoWidgets;
+    if (rawModules.isEmpty) {
+      rawModules = demoWidgets;
+    }
+
+    return _deduplicateModules(rawModules);
   }
 
   /// Catálogo público de módulos (não requer ligação ao Pi).
@@ -188,12 +281,28 @@ class MirrorApiService {
 
   /// Guarda o layout via SSH (atualiza config.js + reinicia).
   Future<bool> saveLayout(Map<int, Map<String, String>> pages) async {
-    return SshService().updateMagicMirrorConfig(pages);
+    final cleanPages = <int, Map<String, String>>{};
+    
+    for (final entry in pages.entries) {
+      final pageNum = entry.key;
+      final cleanPageMap = <String, String>{};
+      
+      for (final posEntry in entry.value.entries) {
+        final pos = posEntry.key;
+        final widgets = posEntry.value.split(',');
+        final cleanWidgets = widgets.map((id) => id.split('#')[0]).toList();
+        cleanPageMap[pos] = cleanWidgets.join(',');
+      }
+      cleanPages[pageNum] = cleanPageMap;
+    }
+    
+    return SshService().updateMagicMirrorConfig(cleanPages);
   }
 
   /// Carrega o layout actual do Pi.
   Future<Map<int, Map<String, String>>> loadLayout() async {
-    return SshService().fetchLayoutFromConfig();
+    final rawLayout = await SshService().fetchLayoutFromConfig();
+    return deduplicateLayout(rawLayout);
   }
 
   // ─── Presets ───────────────────────────────────────────────────────────────
