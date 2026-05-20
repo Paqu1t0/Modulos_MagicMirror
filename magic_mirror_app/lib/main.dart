@@ -38,9 +38,11 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  final ValueNotifier<int> _activeTabNotifier = ValueNotifier<int>(0);
 
   void _navigate(int index) {
     setState(() => _currentIndex = index);
+    _activeTabNotifier.value = index;
   }
 
   @override
@@ -50,8 +52,8 @@ class _MainShellState extends State<MainShell> {
       children: [
         DashboardScreen(onNavigate: _navigate),
         StoreScreen(onNavigate: _navigate),
-        LayoutScreen(onNavigate: _navigate),
-        PresetsScreen(onNavigate: _navigate),
+        LayoutScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
+        PresetsScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
         SettingsScreen(onNavigate: _navigate),
       ],
     );

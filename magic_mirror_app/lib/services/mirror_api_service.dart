@@ -208,7 +208,17 @@ class MirrorApiService {
       }
     } catch (_) {}
 
-    // Inicializar os presets padrão se não existirem localmente
+    // Sem presets locais. Tentamos descarregar o backup guardado no Pi.
+    final piPresets = await _loadPresetsFromPi();
+    if (piPresets != null && piPresets.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_presets', json.encode(piPresets.map((p) => p.toJson()).toList()));
+      } catch (_) {}
+      return piPresets;
+    }
+
+    // Inicializar os presets padrão se não existirem localmente nem no Pi
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('saved_presets', json.encode(defaultPresets.map((p) => p.toJson()).toList()));
@@ -233,6 +243,7 @@ class MirrorApiService {
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+          await _savePresetsToPi(presets);
         } catch (_) {}
         return true;
       }
@@ -254,6 +265,7 @@ class MirrorApiService {
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+          await _savePresetsToPi(presets);
         } catch (_) {}
         return true;
       }
@@ -263,6 +275,14 @@ class MirrorApiService {
 
   Future<void> savePreset(PresetModel preset) async {
     final presets = await getPresets();
+    
+    // Se o preset a ser guardado está ativo, desativamos os outros todos
+    if (preset.isActive) {
+      for (final p in presets) {
+        p.isActive = (p.id == preset.id);
+      }
+    }
+    
     final index = presets.indexWhere((p) => p.id == preset.id);
     if (index != -1) {
       presets[index] = preset;
@@ -272,6 +292,8 @@ class MirrorApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+      // Envia backup para o Pi
+      await _savePresetsToPi(presets);
     } catch (_) {}
   }
 
@@ -281,8 +303,33 @@ class MirrorApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+      // Envia backup para o Pi
+      await _savePresetsToPi(presets);
     } catch (_) {}
   }
+
+  // ─── Sincronização SSH dos Presets no Pi ───────────────────────────────────
+
+  Future<void> _savePresetsToPi(List<PresetModel> presets) async {
+    try {
+      final presetsJson = json.encode(presets.map((p) => p.toJson()).toList());
+      final base64Content = base64Encode(utf8.encode(presetsJson));
+      final cmd = 'echo "$base64Content" | base64 -d > ~/MagicMirror/presets.json';
+      await SshService().executeCommand(cmd);
+    } catch (_) {}
+  }
+
+  Future<List<PresetModel>?> _loadPresetsFromPi() async {
+    try {
+      final result = await SshService().executeCommand('cat ~/MagicMirror/presets.json 2>/dev/null');
+      if (result != null && result.trim().isNotEmpty) {
+        final List<dynamic> data = json.decode(result.trim());
+        return data.map((e) => PresetModel.fromJson(e)).toList();
+      }
+    } catch (_) {}
+    return null;
+  }
+
 
   // ─── Mirror Control ────────────────────────────────────────────────────────
 

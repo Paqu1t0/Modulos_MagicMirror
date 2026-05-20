@@ -120,12 +120,28 @@ class SshService {
   }
 
   Future<bool> setMonitorPower(bool turnOn) async {
-    final cmd = turnOn
-        ? 'export DISPLAY=:0 && (xset dpms force on || vcgencmd display_power 1 || wlr-randr --output HDMI-A-1 --on)'
-        : 'export DISPLAY=:0 && (xset dpms force off || vcgencmd display_power 0 || wlr-randr --output HDMI-A-1 --off)';
-    final result = await executeCommand(cmd);
-    return result != null;
+    // wlr-randr via SSH requer XDG_RUNTIME_DIR e WAYLAND_DISPLAY explícitos.
+    // wayland-0 é o valor correto no Raspberry Pi OS Bookworm (confirmado no sensor.py).
+    // Tenta por ordem: wlr-randr (Wayland) → swaymsg → xset dpms (X11) → vcgencmd (legado)
+    final String action = turnOn ? 'on' : 'off';
+    final String dpmsAction = turnOn ? 'on' : 'off';
+    final String xsetAction = turnOn ? 'force on' : 'force off';
+    final String vcgAction = turnOn ? '1' : '0';
+
+    final cmd = 'export XDG_RUNTIME_DIR=/run/user/1000; '
+        'export WAYLAND_DISPLAY=wayland-0; '
+        '(wlr-randr --output HDMI-A-1 --$action 2>/dev/null'
+        ' || wlr-randr --output HDMI-1 --$action 2>/dev/null'
+        ' || swaymsg "output * dpms $dpmsAction" 2>/dev/null'
+        ' || (export DISPLAY=:0 && xset dpms $xsetAction) 2>/dev/null'
+        ' || vcgencmd display_power $vcgAction 2>/dev/null'
+        ')';
+
+    // O ; echo CMD_SENT confirma que o SSH executou (independente do método que funcionou)
+    final result = await executeCommand('$cmd ; echo CMD_SENT');
+    return result != null && result.contains('CMD_SENT');
   }
+
 
   Future<bool> updatePowerCronSchedule({
     required bool enabled,
@@ -143,9 +159,21 @@ class SshService {
 
       final String newBlock;
       if (enabled) {
-        final offCronCmd = '$offMinute $offHour * * * export DISPLAY=:0 && (xset dpms force off || vcgencmd display_power 0 || wlr-randr --output HDMI-A-1 --off)';
-        final onCronCmd = '$onMinute $onHour * * * export DISPLAY=:0 && (xset dpms force on || vcgencmd display_power 1 || wlr-randr --output HDMI-A-1 --on)';
-        newBlock = '$startTag\n$offCronCmd\n$onCronCmd\n$endTag';
+      // Cron corre sem ambiente Wayland — todas as vars têm de ser definidas inline
+      final offCronCmd = '$offMinute $offHour * * * '
+          'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 '
+          'wlr-randr --output HDMI-A-1 --off 2>/dev/null || '
+          'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 '
+          'swaymsg "output * dpms off" 2>/dev/null || '
+          'vcgencmd display_power 0 2>/dev/null';
+      final onCronCmd = '$onMinute $onHour * * * '
+          'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 '
+          'wlr-randr --output HDMI-A-1 --on 2>/dev/null || '
+          'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 '
+          'swaymsg "output * dpms on" 2>/dev/null || '
+          'vcgencmd display_power 1 2>/dev/null';
+      newBlock = '$startTag\n$offCronCmd\n$onCronCmd\n$endTag';
+
       } else {
         newBlock = '';
       }
@@ -183,23 +211,35 @@ class SshService {
     required double distanceLimit,
     required int activeSeconds,
   }) async {
+    // Escreve config.json na pasta do módulo no Pi.
+    // O novo sensor.py relê este ficheiro automaticamente a cada ~10s.
+    // Formato: { "DISTANCIA_LIMITE": 200.0, "TEMPO_PARA_DESLIGAR": 30 }
     final configMap = {
       'DISTANCIA_LIMITE': distanceLimit,
       'TEMPO_PARA_DESLIGAR': activeSeconds,
     };
     final configJson = json.encode(configMap);
-    
-    final path = '\$HOME/MagicMirror/modules/MMM-Ultrasonic/config.json';
     final base64Content = base64Encode(utf8.encode(configJson));
-    final cmd = 'echo "$base64Content" | base64 -d > $path && echo "WRITE_OK"';
-    
-    final result = await executeCommand(cmd);
-    if (result == null || !result.contains('WRITE_OK')) {
+
+    // Path fixo — o módulo foi instalado pelo utilizador nesta localização
+    const modulePath = r'$HOME/MagicMirror/modules/MMM-Ultrasonic';
+    final writeCmd =
+        'echo "$base64Content" | base64 -d > $modulePath/config.json && echo "WRITE_OK"';
+
+    final writeResult = await executeCommand(writeCmd);
+    if (writeResult == null || !writeResult.contains('WRITE_OK')) {
+      debugPrint('saveUltrasonicConfig: falhou a escrever config.json');
       return false;
     }
-    
-    return await restartMagicMirror();
+
+    // Matar o processo sensor.py em execução para que o node_helper o reinicie
+    // imediatamente com os novos valores (em vez de esperar os ~10s de reload automático).
+    // pkill não falha se o processo não existir (-0 exit code ignorado).
+    await executeCommand('pkill -f sensor.py 2>/dev/null || true');
+
+    return true;
   }
+
 
   Future<bool> restartMagicMirror() async {
     // Tenta pm2 primeiro, depois systemctl, depois npm start
@@ -315,7 +355,7 @@ try {
     const classes = m.classes || '';
     
     // Se for módulo do sistema (sempre visível), coloca-o em todas as páginas
-    const isAlwaysVisible = m.module === 'MMM-GestorPaginas' || m.module === 'MMM-Ultrasonic' || classes.includes('sempre_visivel');
+    const isAlwaysVisible = m.module === 'MMM-GestorPaginas' || classes.includes('sempre_visivel');
     
     if (isAlwaysVisible) {
       const pos = m.position || '';

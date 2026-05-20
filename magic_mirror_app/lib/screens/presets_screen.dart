@@ -1,14 +1,22 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_theme.dart';
 import '../models/preset_model.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'layout_screen.dart';
 
+
 class PresetsScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
+  final ValueNotifier<int>? activeTabNotifier;
 
-  const PresetsScreen({super.key, required this.onNavigate});
+  const PresetsScreen({
+    super.key,
+    required this.onNavigate,
+    this.activeTabNotifier,
+  });
 
   @override
   State<PresetsScreen> createState() => _PresetsScreenState();
@@ -21,14 +29,61 @@ class _PresetsScreenState extends State<PresetsScreen> {
   @override
   void initState() {
     super.initState();
+    widget.activeTabNotifier?.addListener(_handleTabChange);
     _loadPresets();
   }
 
+  @override
+  void dispose() {
+    widget.activeTabNotifier?.removeListener(_handleTabChange);
+    super.dispose();
+  }
+
+  void _handleTabChange() {
+    if (widget.activeTabNotifier?.value == 3 && mounted) {
+      _loadPresets();
+    }
+  }
+
+
   Future<void> _loadPresets() async {
     setState(() => _loading = true);
+    await _resetDefaultPresetsIfStale();
     final presets = await MirrorApiService().getPresets();
     if (mounted) setState(() { _presets = presets; _loading = false; });
   }
+
+  /// Remove layouts desatualizados dos presets padrão (morning/afternoon/night)
+  /// apenas uma vez, sem afetar alterações futuras feitas pelo utilizador.
+  Future<void> _resetDefaultPresetsIfStale() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final migrated = prefs.getBool('presets_migrated_v3') ?? false;
+      if (migrated) return;
+
+      final savedStr = prefs.getString('saved_presets');
+      if (savedStr != null) {
+        final List<dynamic> data = json.decode(savedStr);
+        const defaultIds = {'morning', 'afternoon', 'night'};
+        
+        final migratedPresets = data.map((item) {
+          final id = (item as Map)['id'] as String? ?? '';
+          if (defaultIds.contains(id)) {
+            return <String, dynamic>{
+              ...Map<String, dynamic>.from(item),
+              'layout': null,
+              'widgetCount': 0,
+            };
+          }
+          return item; // Preserva os criados pelo utilizador
+        }).toList();
+
+        await prefs.setString('saved_presets', json.encode(migratedPresets));
+      }
+      await prefs.setBool('presets_migrated_v3', true);
+    } catch (_) {}
+  }
+
 
   PresetModel? get _activePreset {
     try {
@@ -39,6 +94,50 @@ class _PresetsScreenState extends State<PresetsScreen> {
   }
 
   Future<void> _applyPreset(PresetModel preset) async {
+    // Se o preset não tem layout configurado, mostrar diálogo de aviso
+    if (preset.layout == null || preset.layout!.isEmpty ||
+        preset.layout!.values.every((p) => p.isEmpty)) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Preset sem layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.edit_note, color: AppTheme.primary, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                'O preset "${preset.name}" ainda não tem um layout configurado.\n\n'
+                'Toca no preset para abrir o editor de layout e adicionar os teus módulos.',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _editPresetLayout(preset);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Configurar Layout', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     final success = await MirrorApiService().applyPreset(preset.id);
     if (!mounted) return;

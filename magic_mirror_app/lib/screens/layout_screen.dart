@@ -9,8 +9,14 @@ import '../widgets/bottom_nav_bar.dart';
 class LayoutScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
   final PresetModel? presetToEdit;
+  final ValueNotifier<int>? activeTabNotifier;
 
-  const LayoutScreen({super.key, required this.onNavigate, this.presetToEdit});
+  const LayoutScreen({
+    super.key,
+    required this.onNavigate,
+    this.presetToEdit,
+    this.activeTabNotifier,
+  });
 
   @override
   State<LayoutScreen> createState() => _LayoutScreenState();
@@ -35,34 +41,101 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    widget.activeTabNotifier?.addListener(_handleTabChange);
     _loadAll();
   }
 
   @override
   void dispose() {
+    widget.activeTabNotifier?.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleTabChange() {
+    // Se navegamos para a aba de Layout (índice 2)
+    if (widget.activeTabNotifier?.value == 2 && mounted && widget.presetToEdit == null) {
+      _loadAll();
+    }
+  }
+
+
+  void _propagateAlwaysVisibleModules({bool fromLoading = false}) {
+    // 1. Determinar qual a página de referência para a posição do Gestor
+    int referencePage = fromLoading ? 1 : _currentPage;
+    
+    // Se a página de referência não tem o gestor mas outra tem (no carregamento), procuramos
+    if (fromLoading) {
+      bool found = false;
+      for (int p = 1; p <= 3; p++) {
+        for (final val in (_layouts[p] ?? {}).values) {
+          if (val.split(',').contains('MMM-GestorPaginas')) {
+            referencePage = p;
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+    }
+
+    // 2. Achar a posição do 'MMM-GestorPaginas' na página de referência
+    String? targetPosition;
+    final refLayout = _layouts[referencePage] ?? {};
+    for (final entry in refLayout.entries) {
+      if (entry.value.split(',').contains('MMM-GestorPaginas')) {
+        targetPosition = entry.key;
+        break;
+      }
+    }
+
+    // 3. Limpar o 'MMM-GestorPaginas' de todas as posições em todas as páginas
+    for (int p = 1; p <= 3; p++) {
+      final pageLayout = _layouts[p];
+      if (pageLayout == null) continue;
+      
+      final keys = List<String>.from(pageLayout.keys);
+      for (final key in keys) {
+        final val = pageLayout[key] ?? '';
+        final widgets = val.split(',')..remove('MMM-GestorPaginas');
+        widgets.removeWhere((id) => id.isEmpty);
+        
+        if (widgets.isEmpty) {
+          pageLayout.remove(key);
+        } else {
+          pageLayout[key] = widgets.join(',');
+        }
+      }
+    }
+
+    // 4. Se ele deve estar numa posição, adicioná-lo nessa posição em todas as 3 páginas
+    if (targetPosition != null) {
+      for (int p = 1; p <= 3; p++) {
+        _layouts[p] ??= {};
+        final pageLayout = _layouts[p]!;
+        final val = pageLayout[targetPosition] ?? '';
+        final widgets = val.isEmpty ? <String>[] : val.split(',');
+        
+        if (!widgets.contains('MMM-GestorPaginas')) {
+          widgets.add('MMM-GestorPaginas');
+          if (widgets.length > 2) {
+            widgets.removeAt(0); // Garante no máximo 2 widgets por slot
+          }
+          pageLayout[targetPosition] = widgets.join(',');
+        }
+      }
+    }
   }
 
   Future<void> _loadAll() async {
     setState(() => _loadingWidgets = true);
 
-    // Carregar widgets instalados e layout em paralelo
-    final results = await Future.wait([
-      MirrorApiService().getModules(),
-      widget.presetToEdit != null
-          ? Future.value(<int, Map<String, String>>{})
-          : MirrorApiService().loadLayout(),
-    ]);
-
-    final modules = results[0] as List<WidgetModel>;
-    final layout = results[1] as Map<int, Map<String, String>>;
-
-    if (mounted) {
-      setState(() {
-        _installedWidgets = modules.where((w) => w.isInstalled).toList();
-
-        if (widget.presetToEdit != null) {
+    if (widget.presetToEdit != null) {
+      // Modo editar preset — carrega módulos e usa layout do preset
+      final modules = await MirrorApiService().getModules();
+      if (mounted) {
+        setState(() {
+          _installedWidgets = modules.where((w) => w.isInstalled).toList();
           final presetLayout = widget.presetToEdit!.layout;
           if (presetLayout != null && presetLayout.isNotEmpty) {
             _layouts = {
@@ -73,12 +146,52 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
           } else {
             _layouts = {1: {}, 2: {}, 3: {}};
           }
-        } else if (layout.isNotEmpty) {
-          // Layout real do Pi
+          _propagateAlwaysVisibleModules(fromLoading: true);
+          _loadingWidgets = false;
+        });
+      }
+      return;
+    }
+
+    // Modo layout principal — carrega módulos e verifica preset ativo
+    final results = await Future.wait([
+      MirrorApiService().getModules(),
+      MirrorApiService().getPresets(),
+      MirrorApiService().loadLayout(),
+    ]);
+
+    final modules = results[0] as List<WidgetModel>;
+    final presets = results[1] as List<PresetModel>;
+    final liveLayout = results[2] as Map<int, Map<String, String>>;
+
+    if (mounted) {
+      setState(() {
+        _installedWidgets = modules.where((w) => w.isInstalled).toList();
+
+        // Verificar se há preset ativo com layout configurado
+        PresetModel? activePreset;
+        try {
+          activePreset = presets.firstWhere(
+            (p) => p.isActive && p.layout != null && p.layout!.isNotEmpty &&
+                   p.layout!.values.any((page) => page.isNotEmpty),
+          );
+        } catch (_) {
+          activePreset = null;
+        }
+
+        if (activePreset != null) {
+          // Usar o layout do preset ativo
           _layouts = {
-            1: Map<String, String>.from(layout[1] ?? {}),
-            2: Map<String, String>.from(layout[2] ?? {}),
-            3: Map<String, String>.from(layout[3] ?? {}),
+            1: Map<String, String>.from(activePreset.layout![1] ?? {}),
+            2: Map<String, String>.from(activePreset.layout![2] ?? {}),
+            3: Map<String, String>.from(activePreset.layout![3] ?? {}),
+          };
+        } else if (liveLayout.isNotEmpty) {
+          // Layout real do Pi (sem preset ativo ou preset sem layout)
+          _layouts = {
+            1: Map<String, String>.from(liveLayout[1] ?? {}),
+            2: Map<String, String>.from(liveLayout[2] ?? {}),
+            3: Map<String, String>.from(liveLayout[3] ?? {}),
           };
         } else {
           // Fallback demo se não conseguir ler do Pi
@@ -88,6 +201,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
             3: {'Bottom Right': 'photos'},
           };
         }
+        _propagateAlwaysVisibleModules(fromLoading: true);
         _loadingWidgets = false;
       });
     }
@@ -187,6 +301,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
         _layouts[_currentPage] ??= {};
         _layouts[_currentPage]![position] = currentIds.join(',');
+        _propagateAlwaysVisibleModules();
       });
     }
   }
@@ -243,6 +358,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                         } else {
                           _layouts[_currentPage]![position] = ids.join(',');
                         }
+                        _propagateAlwaysVisibleModules();
                       });
                     },
                   )),
@@ -253,6 +369,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   Navigator.pop(ctx);
                   setState(() {
                     _layouts[_currentPage]?.remove(position);
+                    _propagateAlwaysVisibleModules();
                   });
                 },
               ),
@@ -287,12 +404,23 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
       );
       
       await MirrorApiService().savePreset(updated);
+      
+      // Se for o preset selecionado (ativo), altera também o layout no espelho!
+      bool syncSuccess = true;
+      if (updated.isActive) {
+        syncSuccess = await MirrorApiService().saveLayout(_layouts);
+      }
+      
       if (mounted) setState(() => _saving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Preset "${widget.presetToEdit!.name}" guardado com sucesso!'),
-            backgroundColor: AppTheme.success,
+            content: Text(
+              updated.isActive && !syncSuccess
+                ? 'Preset "${widget.presetToEdit!.name}" guardado, mas falhou a sincronizar com o espelho.'
+                : 'Preset "${widget.presetToEdit!.name}" guardado com sucesso!'
+            ),
+            backgroundColor: updated.isActive && !syncSuccess ? AppTheme.warning : AppTheme.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -421,13 +549,24 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     );
 
     await MirrorApiService().savePreset(updated);
+    
+    // Se for o preset selecionado (ativo), altera também o layout no espelho!
+    bool syncSuccess = true;
+    if (updated.isActive) {
+      syncSuccess = await MirrorApiService().saveLayout(_layouts);
+    }
+
     if (mounted) setState(() => _saving = false);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Preset "${preset.name}" atualizado com o layout atual!'),
-          backgroundColor: AppTheme.success,
+          content: Text(
+            updated.isActive && !syncSuccess
+              ? 'Preset "${preset.name}" atualizado, mas falhou a sincronizar com o espelho.'
+              : 'Preset "${preset.name}" atualizado com o layout atual!'
+          ),
+          backgroundColor: updated.isActive && !syncSuccess ? AppTheme.warning : AppTheme.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -540,19 +679,34 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
         widgetCount: unique.length,
         iconName: selectedIcon,
         layout: Map<int, Map<String, String>>.from(_layouts),
-        isActive: false,
+        isActive: true, // Já é criado e selecionado (ativo) automaticamente
       );
 
       await MirrorApiService().savePreset(newPreset);
+      // Sincroniza logo o novo layout com o Magic Mirror via SSH
+      final syncSuccess = await MirrorApiService().saveLayout(_layouts);
+      
       if (mounted) setState(() => _saving = false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Preset "${newPreset.name}" criado com sucesso!'),
-            backgroundColor: AppTheme.success,
+            content: Text(
+              syncSuccess
+                ? 'Preset "${newPreset.name}" criado, ativado e enviado para o espelho!'
+                : 'Preset "${newPreset.name}" criado localmente, mas falhou ao enviar para o espelho.'
+            ),
+            backgroundColor: syncSuccess ? AppTheme.success : AppTheme.warning,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            action: SnackBarAction(
+              label: 'Ver Presets',
+              textColor: Colors.white,
+              onPressed: () {
+                // Navegar para o tab de Presets (index 3)
+                widget.onNavigate(3);
+              },
+            ),
           ),
         );
       }
@@ -1103,6 +1257,24 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
         .where((w) => w.name.toLowerCase().contains(_search.toLowerCase()))
         .toList();
 
+    // 1. Contar quantas vezes cada ID já foi adicionado na página
+    final activeCounts = <String, int>{};
+    for (final id in widget.activeWidgetIds) {
+      activeCounts[id] = (activeCounts[id] ?? 0) + 1;
+    }
+
+    // 2. Pré-calcular se cada elemento na lista filtered já deve aparecer como "ativo"
+    final seenCounts = <String, int>{};
+    final isUsedList = <bool>[];
+    for (final w in filtered) {
+      final id = w.id;
+      final seen = seenCounts[id] ?? 0;
+      seenCounts[id] = seen + 1;
+      
+      final totalActive = activeCounts[id] ?? 0;
+      isUsedList.add(seen < totalActive);
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1153,7 +1325,7 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
             itemCount: filtered.length,
             itemBuilder: (_, i) {
               final w = filtered[i];
-              final isActive = widget.activeWidgetIds.contains(w.id);
+              final isActive = isUsedList[i];
 
               return Opacity(
                 opacity: isActive ? 0.4 : 1.0,
