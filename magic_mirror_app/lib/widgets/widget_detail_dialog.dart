@@ -31,34 +31,50 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
   String? _actionLabel;
 
   Future<void> _handleInstall() async {
+    // Passo 1: Clonar repositório
     setState(() { _loading = true; _actionLabel = 'A instalar...'; });
+    await Future.delayed(const Duration(milliseconds: 200));
+
     final success = await MirrorApiService().installModule(
       widget.widget.id,
       repoUrl: widget.widget.repoUrl,
     );
+
     if (!mounted) return;
-    setState(() { _loading = false; _actionLabel = null; });
+
     if (success) {
+      // Passo 2: Simular feedback de instalação de dependências
+      setState(() { _actionLabel = '📦 A instalar dependências (npm)...'; });
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      setState(() { _actionLabel = '✔️ Concluído!'; });
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+
+      setState(() { _loading = false; _actionLabel = null; });
       widget.onInstalled?.call();
-      widget.onActionDone?.call();
+      widget.onActionDone?.call(); // Dispara refresh + muda para tab instalados
       if (mounted) Navigator.of(context).pop(true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${widget.widget.name} instalado com sucesso!'),
+            content: Text('✅ ${widget.widget.name} instalado! Já aparece nos teus módulos.'),
             backgroundColor: AppTheme.success,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
     } else {
+      setState(() { _loading = false; _actionLabel = null; });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Erro ao instalar. Verifica a ligação SSH.'),
+            content: const Text('❌ Erro ao instalar. Verifica a ligação SSH nas Definições.'),
             backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
@@ -200,6 +216,37 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ],
+              ),
+            ],
+
+            // Aviso se o módulo estiver arquivado ou descontinuado
+            if (w.isArchived || (w.outdated != null && w.outdated!.isNotEmpty)) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.warning.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 18, color: AppTheme.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        w.outdated ?? 'Este módulo foi arquivado pelo autor e pode não funcionar corretamente no MagicMirror.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.warning,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
 

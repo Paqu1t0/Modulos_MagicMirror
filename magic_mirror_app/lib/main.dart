@@ -51,7 +51,7 @@ class _MainShellState extends State<MainShell> {
       index: _currentIndex,
       children: [
         DashboardScreen(onNavigate: _navigate),
-        StoreScreen(onNavigate: _navigate),
+        StoreScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
         LayoutScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
         PresetsScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
         SettingsScreen(onNavigate: _navigate),

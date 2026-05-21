@@ -132,7 +132,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
     if (widget.presetToEdit != null) {
       // Modo editar preset — carrega módulos e usa layout do preset
-      final modules = await MirrorApiService().getModules();
+      final modules = await MirrorApiService().getAllInstalledModules();
       if (mounted) {
         setState(() {
           _installedWidgets = modules.where((w) => w.isInstalled).toList();
@@ -151,7 +151,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
     // Modo layout principal — carrega módulos e verifica preset ativo
     final results = await Future.wait([
-      MirrorApiService().getModules(),
+      MirrorApiService().getAllInstalledModules(),
       MirrorApiService().getPresets(),
       MirrorApiService().loadLayout(),
     ]);
@@ -421,6 +421,36 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
       }
     } else {
       final success = await MirrorApiService().saveLayout(_layouts);
+      
+      // Se houver um preset ativo, atualizá-lo para refletir o novo layout real
+      if (success) {
+        try {
+          final presets = await MirrorApiService().getPresets();
+          final activeIndex = presets.indexWhere((p) => p.isActive);
+          if (activeIndex != -1) {
+            final activePreset = presets[activeIndex];
+            
+            final unique = <String>{};
+            for (final page in _layouts.values) {
+              for (final val in page.values) {
+                if (val.isNotEmpty) {
+                  unique.addAll(val.split(','));
+                }
+              }
+            }
+            
+            final updatedPreset = activePreset.copyWith(
+              layout: Map<int, Map<String, String>>.from(_layouts),
+              widgetCount: unique.length,
+            );
+            
+            await MirrorApiService().savePreset(updatedPreset);
+          }
+        } catch (e) {
+          debugPrint('Falha ao atualizar o preset ativo: $e');
+        }
+      }
+
       if (mounted) setState(() => _saving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

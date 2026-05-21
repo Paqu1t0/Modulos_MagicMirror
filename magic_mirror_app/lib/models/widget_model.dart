@@ -12,6 +12,8 @@ class WidgetModel {
   bool isInstalled;
   String? position;
   final String? imageUrl;
+  bool isArchived;
+  String? outdated;
 
   WidgetModel({
     required this.id,
@@ -25,6 +27,8 @@ class WidgetModel {
     this.isInstalled = false,
     this.position,
     this.imageUrl,
+    this.isArchived = false,
+    this.outdated,
   });
 
   /// Parse response from the local MagicMirror MMM-Remote-Control API.
@@ -38,6 +42,8 @@ class WidgetModel {
       isInstalled: json['installed'] as bool? ?? false,
       position: json['position'] as String?,
       imageUrl: json['imageUrl'] as String?,
+      isArchived: json['isArchived'] as bool? ?? false,
+      outdated: json['outdated'] as String?,
     );
   }
 
@@ -71,6 +77,8 @@ class WidgetModel {
       stars: (json['stars'] as num?)?.toInt() ?? 0,
       isInstalled: false,
       imageUrl: imageUrl,
+      isArchived: json['isArchived'] as bool? ?? false,
+      outdated: json['outdated'] as String?,
     );
   }
 
@@ -82,6 +90,8 @@ class WidgetModel {
         'installed': isInstalled,
         'position': position,
         'imageUrl': imageUrl,
+        'isArchived': isArchived,
+        'outdated': outdated,
       };
 
   static String detectCategory({

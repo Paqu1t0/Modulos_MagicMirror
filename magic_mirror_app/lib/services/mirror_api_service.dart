@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/mirror_status.dart';
@@ -213,9 +214,13 @@ class MirrorApiService {
     return result;
   }
 
-  /// Módulos instalados no Pi (via HTTP ou SSH fallback).
+  /// Módulos **configurados** no Pi (presentes no config.js ou via HTTP).
+  /// Usado para a tab "No Mirror" — reflete o que está realmente a correr no espelho.
+  /// NÃO inclui módulos que estão apenas na pasta mas não no config.js.
   Future<List<WidgetModel>> getModules() async {
     List<WidgetModel> rawModules = [];
+
+    // 1. Tentar HTTP (MMM-Remote-Control)
     try {
       final response = await http
           .get(Uri.parse('$_baseUrl/api/modules'))
@@ -226,11 +231,17 @@ class MirrorApiService {
       }
     } catch (_) {}
 
+    // 2. Fallback SSH: lê o config.js (apenas módulos configurados)
     if (rawModules.isEmpty) {
-      final sshModules = await SshService().fetchRealModules();
-      if (sshModules.isNotEmpty) {
-        rawModules = sshModules.map((m) => WidgetModel.fromJson(m)).toList();
+      final sshRaw = await SshService().fetchRealModules();
+      if (sshRaw.isNotEmpty) {
+        rawModules = sshRaw.map((m) => WidgetModel.fromJson(m)).toList();
       }
+    }
+
+    // 3. Marcar todos como instalados (estão no config.js = configurados)
+    for (final w in rawModules) {
+      w.isInstalled = true;
     }
 
     if (rawModules.isEmpty) {
@@ -239,6 +250,50 @@ class MirrorApiService {
 
     return _deduplicateModules(rawModules);
   }
+
+  /// Todos os módulos instalados no Pi (configurados + pasta apenas).
+  /// Usado para a tab "No Mirror" da Loja e para o LayoutScreen.
+  Future<List<WidgetModel>> getAllInstalledModules() async {
+    // Começa com os módulos configurados
+    final configured = await getModules();
+    final configuredIds = configured.map((w) => w.id).toSet();
+
+    // Adiciona módulos que estão na pasta mas não no config.js
+    final folderNames = await SshService().listInstalledModuleNames();
+    final extra = <WidgetModel>[];
+
+    // Carrega o catálogo em fallback para obter info ricas (descrição, categoria, etc.)
+    final catalogue = await getCatalogueModules();
+    final catMap = {for (var w in catalogue) w.id.toLowerCase(): w};
+
+    for (final folderName in folderNames) {
+      if (!configuredIds.contains(folderName)) {
+        final displayName = folderName
+            .replaceAll('MMM-', '')
+            .replaceAll('-', ' ');
+            
+        final idLower = folderName.toLowerCase();
+        final match = catMap[idLower] ?? catMap[idLower.replaceAll('mmm-', '')];
+
+        extra.add(WidgetModel(
+          id: folderName,
+          name: match?.name ?? displayName,
+          description: match?.description ?? 'Módulo instalado — disponível para configurar',
+          category: match?.category ?? 'Geral',
+          icon: match?.icon ?? Icons.extension,
+          isInstalled: true,
+          author: match?.author,
+          repoUrl: match?.repoUrl,
+          imageUrl: match?.imageUrl,
+          isArchived: match?.isArchived ?? false,
+          outdated: match?.outdated,
+        ));
+      }
+    }
+
+    return [...configured, ...extra];
+  }
+
 
   /// Catálogo público de módulos (não requer ligação ao Pi).
   Future<List<WidgetModel>> getCatalogueModules() async {
@@ -285,9 +340,63 @@ class MirrorApiService {
     return SshService().installModule(url, moduleId);
   }
 
-  /// Remove um módulo via SSH.
+  /// Remove um módulo via SSH e limpa-o de todos os presets locais.
   Future<bool> removeModule(String moduleId) async {
-    return SshService().removeModule(moduleId);
+    final success = await SshService().removeModule(moduleId);
+    if (success) {
+      // Limpar este módulo de todos os layouts dos presets guardados
+      try {
+        final presets = await getPresets();
+        bool changedAny = false;
+        
+        for (int i = 0; i < presets.length; i++) {
+          final preset = presets[i];
+          if (preset.layout == null) continue;
+          
+          bool presetChanged = false;
+          final newLayout = Map<int, Map<String, String>>.from(preset.layout!);
+          final unique = <String>{};
+          
+          for (final page in newLayout.keys.toList()) {
+            final pageMap = Map<String, String>.from(newLayout[page] ?? {});
+            for (final pos in pageMap.keys.toList()) {
+              final widgets = pageMap[pos]!.split(',');
+              final initialLength = widgets.length;
+              
+              widgets.removeWhere((id) => id.split('#')[0] == moduleId);
+              
+              if (widgets.length != initialLength) {
+                presetChanged = true;
+                if (widgets.isEmpty) {
+                  pageMap.remove(pos);
+                } else {
+                  pageMap[pos] = widgets.join(',');
+                }
+              }
+              
+              if (widgets.isNotEmpty) {
+                unique.addAll(widgets);
+              }
+            }
+            newLayout[page] = pageMap;
+          }
+          
+          if (presetChanged) {
+            presets[i] = preset.copyWith(layout: newLayout, widgetCount: unique.length);
+            changedAny = true;
+          }
+        }
+        
+        if (changedAny) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_presets', json.encode(presets.map((p) => p.toJson()).toList()));
+          await _savePresetsToPi(presets);
+        }
+      } catch (e) {
+        debugPrint('Erro a limpar o módulo dos presets: $e');
+      }
+    }
+    return success;
   }
 
   /// Atualiza um módulo via SSH (git pull).

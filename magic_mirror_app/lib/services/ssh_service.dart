@@ -441,6 +441,7 @@ try {
   }
 
   /// Atualiza o config.js para atribuir as classes de página aos módulos.
+  /// Se um módulo não existe ainda no config.js, insere-o automaticamente.
   Future<bool> updateMagicMirrorConfig(
       Map<int, Map<String, String>> pages) async {
     final pagesJson = json.encode(
@@ -501,7 +502,7 @@ function findEnclosingObjectBounds(str, matchIndex) {
   return { start: openBraceIndex, end: closeBraceIndex };
 }
 
-// Parse blocks
+// Parse existing blocks
 const blocks = [];
 const regex = /module\s*:\s*["']([^"']+)["']/g;
 let match;
@@ -531,6 +532,22 @@ for (const block of blocks) {
   blocksByName[block.name].push(block);
 }
 
+// Collect all unique module names that appear in the desired layout
+const allLayoutModules = {};
+for (const [pageNum, layout] of Object.entries(pages)) {
+  for (const [position, moduleNamesStr] of Object.entries(layout)) {
+    const pos = position.toLowerCase().replace(/ /g, '_');
+    const moduleNames = moduleNamesStr.split(',');
+    for (const moduleName of moduleNames) {
+      if (!moduleName) continue;
+      if (!allLayoutModules[moduleName]) {
+        allLayoutModules[moduleName] = [];
+      }
+      allLayoutModules[moduleName].push({ page: pageNum, pos });
+    }
+  }
+}
+
 // Process each page and assign placements to matching physical blocks sequentially
 for (const [pageNum, layout] of Object.entries(pages)) {
   const pageCounter = {};
@@ -538,6 +555,7 @@ for (const [pageNum, layout] of Object.entries(pages)) {
     const pos = position.toLowerCase().replace(/ /g, '_');
     const moduleNames = moduleNamesStr.split(',');
     for (const moduleName of moduleNames) {
+      if (!moduleName) continue;
       if (!pageCounter[moduleName]) {
         pageCounter[moduleName] = 0;
       }
@@ -556,6 +574,8 @@ for (const [pageNum, layout] of Object.entries(pages)) {
         }
         block.updated = true;
       }
+      // If blockIndex >= matchingBlocks.length, this module doesn't exist in config.js yet
+      // We'll handle new inserts below
     }
   }
 }
@@ -571,10 +591,10 @@ for (const block of blocks) {
   }
 }
 
-// Sort back to front
+// Sort back to front for replacements
 blocks.sort((a, b) => b.start - a.start);
 
-// Apply replacements
+// Apply replacements to existing blocks
 for (const block of blocks) {
   if (!block.updated) continue;
   
@@ -600,8 +620,62 @@ for (const block of blocks) {
   content = content.substring(0, block.start) + objectStr + content.substring(block.end + 1);
 }
 
+// INSERT new modules that don't exist in config.js yet
+// Find all modules in the desired layout that have no block in config.js
+const existingNames = new Set(blocks.map(b => b.name));
+const modulesToInsert = [];
+
+for (const [moduleName, placements] of Object.entries(allLayoutModules)) {
+  if (!existingNames.has(moduleName)) {
+    // This module is new — build a combined placement entry
+    const combinedPlacements = placements;
+    const firstPos = combinedPlacements[0].pos;
+    const classList = [];
+    for (const pl of combinedPlacements) {
+      classList.push(`pagina_${pl.page}`);
+      classList.push(`pagina_${pl.page}_pos_${pl.pos}`);
+    }
+    const classStr = classList.join(' ');
+    modulesToInsert.push({
+      name: moduleName,
+      pos: firstPos,
+      classStr: classStr
+    });
+  }
+}
+
+if (modulesToInsert.length > 0) {
+  // Find the closing bracket of the modules array: last ']' before the closing '};' of config
+  // Strategy: find 'modules:' then find its array's closing ']'
+  const modulesMatch = /modules\s*:\s*\[/.exec(content);
+  if (modulesMatch) {
+    let depth = 0;
+    let arrayStart = modulesMatch.index + modulesMatch[0].length - 1; // index of '['
+    let arrayEnd = -1;
+    for (let i = arrayStart; i < content.length; i++) {
+      if (content[i] === '[') depth++;
+      else if (content[i] === ']') {
+        depth--;
+        if (depth === 0) {
+          arrayEnd = i;
+          break;
+        }
+      }
+    }
+    if (arrayEnd !== -1) {
+      // Build the new module blocks string
+      let insertStr = '';
+      for (const m of modulesToInsert) {
+        insertStr += `\n    {\n      module: "${m.name}",\n      position: "${m.pos}",\n      classes: "${m.classStr}",\n    },`;
+      }
+      // Insert before the closing ']'
+      content = content.substring(0, arrayEnd) + insertStr + '\n  ' + content.substring(arrayEnd);
+    }
+  }
+}
+
 fs.writeFileSync(configPath, content, 'utf8');
-console.log(JSON.stringify({ ok: true }));
+console.log(JSON.stringify({ ok: true, inserted: modulesToInsert.length }));
 """.replaceFirst('__PAGES_JSON__', pagesJson);
 
     final result = await _runNodeScript(jsScript);
@@ -632,9 +706,94 @@ console.log(JSON.stringify({ ok: true }));
   }
 
   Future<bool> removeModule(String moduleName) async {
+    // 1. Remover do config.js primeiro para evitar erros ao reiniciar o MagicMirror
+    final jsScript = r"""
+const fs = require('fs');
+const path = require('path');
+const home = process.env.HOME || '/home/pi';
+const configPath = path.join(home, 'MagicMirror/config/config.js');
+
+if (!fs.existsSync(configPath)) {
+  console.log(JSON.stringify({ ok: false, error: 'config not found' }));
+  process.exit(0);
+}
+
+let content = fs.readFileSync(configPath, 'utf8');
+
+function findEnclosingObjectBounds(str, matchIndex) {
+  let openBraceIndex = -1;
+  let balance = 0;
+  for (let i = matchIndex; i >= 0; i--) {
+    if (str[i] === '}') {
+      balance++;
+    } else if (str[i] === '{') {
+      if (balance === 0) { openBraceIndex = i; break; }
+      balance--;
+    }
+  }
+  if (openBraceIndex === -1) return null;
+
+  balance = 1;
+  let closeBraceIndex = -1;
+  for (let i = openBraceIndex + 1; i < str.length; i++) {
+    if (str[i] === '"' || str[i] === "'" || str[i] === '`') {
+      const quote = str[i]; i++;
+      while (i < str.length && str[i] !== quote) {
+        if (str[i] === '\\') i++; i++;
+      }
+      continue;
+    }
+    if (str[i] === '{') { balance++; } 
+    else if (str[i] === '}') {
+      balance--;
+      if (balance === 0) { closeBraceIndex = i; break; }
+    }
+  }
+  return { start: openBraceIndex, end: closeBraceIndex };
+}
+
+const regex = /module\s*:\s*["']([^"']+)["']/g;
+let match;
+let blocksToRemove = [];
+while ((match = regex.exec(content)) !== null) {
+  if (match[1] === '__MODULE_NAME__') {
+    const bounds = findEnclosingObjectBounds(content, match.index);
+    if (bounds) blocksToRemove.push(bounds);
+  }
+}
+
+blocksToRemove.sort((a, b) => b.start - a.start);
+for (const b of blocksToRemove) {
+  let endIdx = b.end + 1;
+  while(endIdx < content.length && (content[endIdx] === ' ' || content[endIdx] === '\n' || content[endIdx] === '\r')) {
+    endIdx++;
+  }
+  if (content[endIdx] === ',') endIdx++;
+  
+  content = content.substring(0, b.start) + content.substring(endIdx);
+}
+
+if (blocksToRemove.length > 0) {
+  fs.writeFileSync(configPath, content, 'utf8');
+}
+console.log(JSON.stringify({ ok: true, removed: blocksToRemove.length }));
+""".replaceAll('__MODULE_NAME__', moduleName);
+
+    // Escrever para um ficheiro temporário e correr, para evitar problemas de escape de bash com node -e
+    await executeCommand("cat << 'EOF' > /tmp/remove_module.js\n$jsScript\nEOF");
+    final nodeOutput = await executeCommand("node /tmp/remove_module.js");
+    debugPrint("removeModule Node output: $nodeOutput");
+
+    // 2. Apagar a pasta
     final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final result = await executeCommand('rm -rf "$dir" && echo RM_OK');
-    return result != null && result.contains('RM_OK');
+    
+    // 3. Reiniciar para aplicar
+    if (result != null && result.contains('RM_OK')) {
+      await restartMagicMirror();
+      return true;
+    }
+    return false;
   }
 
   Future<bool> updateModule(String moduleName) async {

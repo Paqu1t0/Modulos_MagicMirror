@@ -109,8 +109,13 @@ final Map<String, _CategoryChipStyle> _categoryStyles = {
 
 class StoreScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
+  final ValueNotifier<int>? activeTabNotifier;
 
-  const StoreScreen({super.key, required this.onNavigate});
+  const StoreScreen({
+    super.key,
+    required this.onNavigate,
+    this.activeTabNotifier,
+  });
 
   @override
   State<StoreScreen> createState() => _StoreScreenState();
@@ -152,15 +157,24 @@ class _StoreScreenState extends State<StoreScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _searchController.addListener(_onSearch);
+    widget.activeTabNotifier?.addListener(_handleTabChange);
     _loadCatalogue();
     _loadInstalled();
   }
 
   @override
   void dispose() {
+    widget.activeTabNotifier?.removeListener(_handleTabChange);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleTabChange() {
+    // Se navegamos para a aba da Loja (índice 1)
+    if (widget.activeTabNotifier?.value == 1 && mounted) {
+      _refreshAll();
+    }
   }
 
   Future<void> _loadCatalogue() async {
@@ -171,24 +185,61 @@ class _StoreScreenState extends State<StoreScreen>
         _catalogue = widgets;
         _loadingCatalogue = false;
       });
+      _crossReferenceInstalledStatus();
       _onSearch();
     }
   }
 
   Future<void> _loadInstalled() async {
     setState(() => _loadingInstalled = true);
-    final widgets = await MirrorApiService().getModules();
+    final widgets = await MirrorApiService().getAllInstalledModules();
     if (mounted) {
       setState(() {
         _installed = widgets.where((w) => w.isInstalled).toList();
         _loadingInstalled = false;
       });
+      _crossReferenceInstalledStatus();
       _onSearch();
     }
   }
 
   Future<void> _refreshAll() =>
       Future.wait([_loadCatalogue(), _loadInstalled()]);
+
+  void _crossReferenceInstalledStatus() {
+    if (_catalogue.isEmpty) return;
+    
+    // Mapeamento dos módulos do catálogo para fácil pesquisa
+    final catalogueMap = {for (var w in _catalogue) w.id.toLowerCase(): w};
+    
+    // Conjunto de IDs instalados (case-insensitive + sem prefixo MMM-)
+    final installedIds = _installed
+        .map((w) => w.id.toLowerCase())
+        .toSet();
+    final installedNames = _installed
+        .map((w) => w.id.toLowerCase().replaceAll('mmm-', ''))
+        .toSet();
+        
+    setState(() {
+      for (final w in _catalogue) {
+        final idLower = w.id.toLowerCase();
+        final nameLower = idLower.replaceAll('mmm-', '');
+        w.isInstalled = installedIds.contains(idLower) ||
+            installedNames.contains(nameLower);
+      }
+      
+      // Copiar estado de arquivado/descontinuado para os módulos instalados
+      for (final w in _installed) {
+        final idLower = w.id.toLowerCase();
+        final match = catalogueMap[idLower] ?? catalogueMap[idLower.replaceAll('mmm-', '')];
+        if (match != null) {
+          w.isArchived = match.isArchived;
+          w.outdated = match.outdated;
+        }
+      }
+    });
+  }
+
 
   void _onSearch() {
     final q = _searchController.text.toLowerCase();
@@ -197,7 +248,9 @@ class _StoreScreenState extends State<StoreScreen>
           .where((w) =>
               (w.name.toLowerCase().contains(q) ||
                   w.description.toLowerCase().contains(q)) &&
-              (_selectedCategory == 'Todos' || w.category == _selectedCategory))
+              (_selectedCategory == 'Todos' || w.category == _selectedCategory) &&
+              // Ocultar módulos arquivados ou marcados como abandonados/outdated na loja
+              !w.isArchived && (w.outdated == null || w.outdated!.isEmpty))
           .toList();
       _filteredInstalled = _installed
           .where((w) =>
@@ -232,9 +285,46 @@ class _StoreScreenState extends State<StoreScreen>
         mode: mode,
         onActionDone: () {
           if (mode == WidgetDialogMode.install) {
-            setState(() => w.isInstalled = true);
+            // Atualização imediata no catálogo (sem esperar SSH)
+            setState(() {
+              w.isInstalled = true;
+              
+              // Adicionar imediatamente aos instalados
+              final installedWidget = WidgetModel(
+                id: w.id,
+                name: w.name,
+                description: w.description,
+                category: w.category,
+                icon: w.icon,
+                author: w.author,
+                repoUrl: w.repoUrl,
+                stars: w.stars,
+                isInstalled: true,
+                imageUrl: w.imageUrl,
+                isArchived: w.isArchived,
+                outdated: w.outdated,
+              );
+              if (!_installed.any((x) => x.id == installedWidget.id)) {
+                _installed.add(installedWidget);
+              }
+            });
+            _onSearch(); // Atualiza a lista filtrada no ecrã imediatamente
+            
+            // Muda para tab "No Mirror" imediatamente
+            if (mounted) _tabController.animateTo(1);
+            // Refresh completo de ambas as listas em background
+            _refreshAll();
+          } else {
+            // Se foi removido, remover imediatamente da lista local
+            setState(() {
+              _installed.removeWhere((x) => x.id == w.id);
+              w.isInstalled = false;
+            });
+            _onSearch(); // Atualiza a lista filtrada no ecrã imediatamente
+            
+            // Após remover/atualizar: refresh completo de ambas as listas
+            _refreshAll();
           }
-          _loadInstalled();
         },
       ),
     );
@@ -382,20 +472,34 @@ class _StoreScreenState extends State<StoreScreen>
                       Tab(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.library_books_outlined, size: 16),
-                            const SizedBox(width: 6),
-                            Text('Disponíveis (${_filteredCatalogue.length})'),
+                            const Icon(Icons.library_books_outlined, size: 15),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'Disponíveis (${_filteredCatalogue.length})',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       Tab(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle_outline, size: 16),
-                            const SizedBox(width: 6),
-                            Text('No Mirror (${_filteredInstalled.length})'),
+                            const Icon(Icons.check_circle_outline, size: 15),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'No Mirror (${_filteredInstalled.length})',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -714,6 +818,29 @@ class _InstalledCard extends StatelessWidget {
                   )
                 else
                   Text(module.category, style: AppTheme.bodySmall),
+                if (module.isArchived || (module.outdated != null && module.outdated!.isNotEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            size: 12, color: AppTheme.warning),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            module.outdated ?? 'Descontinuado/Arquivado',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppTheme.warning,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),

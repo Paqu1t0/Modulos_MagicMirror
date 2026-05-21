@@ -78,6 +78,26 @@ class PresetModel {
         'layout': layout?.map((k, v) => MapEntry(k.toString(), v)),
         'active': isActive,
       };
+
+  PresetModel copyWith({
+    String? id,
+    String? name,
+    String? description,
+    int? widgetCount,
+    String? iconName,
+    Map<int, Map<String, String>>? layout,
+    bool? isActive,
+  }) {
+    return PresetModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      widgetCount: widgetCount ?? this.widgetCount,
+      iconName: iconName ?? this.iconName,
+      layout: layout ?? this.layout,
+      isActive: isActive ?? this.isActive,
+    );
+  }
 }
 
 // Presets padrão — sem layout pré-definido para não conflituar com os módulos reais do Pi.
