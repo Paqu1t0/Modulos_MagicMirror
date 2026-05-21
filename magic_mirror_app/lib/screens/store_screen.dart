@@ -6,6 +6,107 @@ import '../widgets/bottom_nav_bar.dart';
 import '../widgets/widget_detail_dialog.dart';
 import '../widgets/mirror_preview_sheet.dart';
 
+class _CategoryChipStyle {
+  final Color bg;
+  final Color text;
+  final Color border;
+  final IconData icon;
+
+  const _CategoryChipStyle({
+    required this.bg,
+    required this.text,
+    required this.border,
+    required this.icon,
+  });
+}
+
+final Map<String, _CategoryChipStyle> _categoryStyles = {
+  'Todos': const _CategoryChipStyle(
+    bg: Color(0xFF2C2C2E),
+    text: Colors.white,
+    border: Color(0xFF3A3A3C),
+    icon: Icons.all_inclusive_rounded,
+  ),
+  'Calendário': const _CategoryChipStyle(
+    bg: Color(0xFFE1F5FE),
+    text: Color(0xFF0277BD),
+    border: Color(0xFFB3E5FC),
+    icon: Icons.calendar_today_rounded,
+  ),
+  'Multimédia': const _CategoryChipStyle(
+    bg: Color(0xFFE0F7FA),
+    text: Color(0xFF00838F),
+    border: Color(0xFFB2EBF2),
+    icon: Icons.play_circle_fill_rounded,
+  ),
+  'Deteção de Movimento': const _CategoryChipStyle(
+    bg: Color(0xFFFCE4EC),
+    text: Color(0xFFC2185B),
+    border: Color(0xFFF8BBD0),
+    icon: Icons.directions_run_rounded,
+  ),
+  'Notícias': const _CategoryChipStyle(
+    bg: Color(0xFFECEFF1),
+    text: Color(0xFF37474F),
+    border: Color(0xFFCFD8DC),
+    icon: Icons.newspaper_rounded,
+  ),
+  'Transportes Públicos': const _CategoryChipStyle(
+    bg: Color(0xFFFFF8E1),
+    text: Color(0xFFFF8F00),
+    border: Color(0xFFFFECB3),
+    icon: Icons.directions_bus_rounded,
+  ),
+  'Casa Inteligente': const _CategoryChipStyle(
+    bg: Color(0xFFFFF3E0),
+    text: Color(0xFFEF6C00),
+    border: Color(0xFFFFE0B2),
+    icon: Icons.lightbulb_rounded,
+  ),
+  'Desporto': const _CategoryChipStyle(
+    bg: Color(0xFFEDE7F6),
+    text: Color(0xFF4527A0),
+    border: Color(0xFFD1C4E9),
+    icon: Icons.sports_basketball_rounded,
+  ),
+  'Bolsa': const _CategoryChipStyle(
+    bg: Color(0xFFF5F5F5),
+    text: Color(0xFF424242),
+    border: Color(0xFFE0E0E0),
+    icon: Icons.show_chart_rounded,
+  ),
+  'Leitura de Voz': const _CategoryChipStyle(
+    bg: Color(0xFFF9FBE7),
+    text: Color(0xFF827717),
+    border: Color(0xFFE6EE9C),
+    icon: Icons.record_voice_over_rounded,
+  ),
+  'Trânsito': const _CategoryChipStyle(
+    bg: Color(0xFFE8F5E9),
+    text: Color(0xFF2E7D32),
+    border: Color(0xFFC8E6C9),
+    icon: Icons.traffic_rounded,
+  ),
+  'Controlo de Voz': const _CategoryChipStyle(
+    bg: Color(0xFFE3F2FD),
+    text: Color(0xFF1565C0),
+    border: Color(0xFFBBDEFB),
+    icon: Icons.mic_rounded,
+  ),
+  'Meteorologia': const _CategoryChipStyle(
+    bg: Color(0xFFFFEBEE),
+    text: Color(0xFFC62828),
+    border: Color(0xFFFFCDD2),
+    icon: Icons.wb_sunny_rounded,
+  ),
+  'Geral': const _CategoryChipStyle(
+    bg: Color(0xFF2C2C2E),
+    text: Colors.white70,
+    border: Color(0xFF3A3A3C),
+    icon: Icons.grid_view_rounded,
+  ),
+};
+
 class StoreScreen extends StatefulWidget {
   final ValueChanged<int> onNavigate;
 
@@ -27,6 +128,24 @@ class _StoreScreenState extends State<StoreScreen>
   final _searchController = TextEditingController();
   bool _loadingCatalogue = true;
   bool _loadingInstalled = true;
+
+  String _selectedCategory = 'Todos';
+  final List<String> _categories = [
+    'Todos',
+    'Calendário',
+    'Meteorologia',
+    'Notícias',
+    'Multimédia',
+    'Casa Inteligente',
+    'Transportes Públicos',
+    'Trânsito',
+    'Desporto',
+    'Bolsa',
+    'Deteção de Movimento',
+    'Controlo de Voz',
+    'Leitura de Voz',
+    'Geral',
+  ];
 
   @override
   void initState() {
@@ -50,23 +169,21 @@ class _StoreScreenState extends State<StoreScreen>
     if (mounted) {
       setState(() {
         _catalogue = widgets;
-        _filteredCatalogue = widgets;
         _loadingCatalogue = false;
       });
+      _onSearch();
     }
   }
 
   Future<void> _loadInstalled() async {
     setState(() => _loadingInstalled = true);
-    // getModules() já tenta HTTP -> SSH node -> SSH ls
     final widgets = await MirrorApiService().getModules();
     if (mounted) {
       setState(() {
-        // Todos os módulos vindos do Pi têm isInstalled=true
         _installed = widgets.where((w) => w.isInstalled).toList();
-        _filteredInstalled = _installed;
         _loadingInstalled = false;
       });
+      _onSearch();
     }
   }
 
@@ -78,11 +195,14 @@ class _StoreScreenState extends State<StoreScreen>
     setState(() {
       _filteredCatalogue = _catalogue
           .where((w) =>
-              w.name.toLowerCase().contains(q) ||
-              w.description.toLowerCase().contains(q))
+              (w.name.toLowerCase().contains(q) ||
+                  w.description.toLowerCase().contains(q)) &&
+              (_selectedCategory == 'Todos' || w.category == _selectedCategory))
           .toList();
       _filteredInstalled = _installed
-          .where((w) => w.name.toLowerCase().contains(q))
+          .where((w) =>
+              w.name.toLowerCase().contains(q) &&
+              (_selectedCategory == 'Todos' || w.category == _selectedCategory))
           .toList();
     });
   }
@@ -176,6 +296,80 @@ class _StoreScreenState extends State<StoreScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Chips de Categoria
+                  SizedBox(
+                    height: 38,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        final isSelected = cat == _selectedCategory;
+                        final style = _categoryStyles[cat] ?? _categoryStyles['Todos']!;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = cat;
+                            });
+                            _onSearch();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(right: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? style.bg
+                                  : style.bg.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? style.border
+                                    : style.border.withValues(alpha: 0.3),
+                                width: isSelected ? 1.8 : 1.0,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: style.bg.withValues(alpha: 0.25),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    style.icon,
+                                    size: 14,
+                                    color: isSelected
+                                        ? style.text
+                                        : style.text.withValues(alpha: 0.7),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    cat,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? style.text
+                                          : style.text.withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   // Tabs
                   TabBar(
@@ -191,7 +385,7 @@ class _StoreScreenState extends State<StoreScreen>
                           children: [
                             const Icon(Icons.library_books_outlined, size: 16),
                             const SizedBox(width: 6),
-                            Text('Disponíveis (${_catalogue.length})'),
+                            Text('Disponíveis (${_filteredCatalogue.length})'),
                           ],
                         ),
                       ),
@@ -201,7 +395,7 @@ class _StoreScreenState extends State<StoreScreen>
                           children: [
                             const Icon(Icons.check_circle_outline, size: 16),
                             const SizedBox(width: 6),
-                            Text('No Mirror (${_installed.length})'),
+                            Text('No Mirror (${_filteredInstalled.length})'),
                           ],
                         ),
                       ),
@@ -399,7 +593,7 @@ class _CatalogueCard extends StatelessWidget {
                     Expanded(
                       child: Text(module.description,
                           style: AppTheme.bodySmall,
-                          maxLines: 3,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                     ),
                     if (module.stars > 0)

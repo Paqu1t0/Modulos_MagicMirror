@@ -11,6 +11,7 @@ class WidgetModel {
   final int stars;
   bool isInstalled;
   String? position;
+  final String? imageUrl;
 
   WidgetModel({
     required this.id,
@@ -23,6 +24,7 @@ class WidgetModel {
     this.stars = 0,
     this.isInstalled = false,
     this.position,
+    this.imageUrl,
   });
 
   /// Parse response from the local MagicMirror MMM-Remote-Control API.
@@ -35,23 +37,40 @@ class WidgetModel {
       icon: Icons.widgets,
       isInstalled: json['installed'] as bool? ?? false,
       position: json['position'] as String?,
+      imageUrl: json['imageUrl'] as String?,
     );
   }
 
   /// Parse response from the public magicmirror.builders catalogue API.
   factory WidgetModel.fromCatalogueJson(Map<String, dynamic> json) {
-    final name = (json['name'] as String? ?? 'Unknown').replaceAll('MMM-', '');
-    final category = _mapCategory(json['categories'] as List<dynamic>?);
+    final fullName = json['name'] as String? ?? 'Unknown';
+    final name = fullName.replaceAll('MMM-', '');
+    
+    final officialCat = json['category'] as String?;
+    final tags = json['tags'] as List<dynamic>?;
+    final description = json['description'] as String? ?? '';
+    
+    final category = detectCategory(
+      name: fullName,
+      description: description,
+      tags: tags,
+      officialCategory: officialCat,
+    );
+
+    final imageFile = json['image'] as String?;
+    final imageUrl = imageFile != null ? 'https://modules.magicmirror.builders/screenshots/$imageFile' : null;
+
     return WidgetModel(
-      id: json['name'] as String? ?? name,
+      id: fullName,
       name: name,
-      description: json['description'] as String? ?? '',
+      description: description,
       category: category,
       icon: _iconForCategory(category),
-      author: json['author'] as String?,
+      author: (json['maintainer'] as String?) ?? (json['author'] as String?),
       repoUrl: json['url'] as String?,
       stars: (json['stars'] as num?)?.toInt() ?? 0,
       isInstalled: false,
+      imageUrl: imageUrl,
     );
   }
 
@@ -62,31 +81,116 @@ class WidgetModel {
         'category': category,
         'installed': isInstalled,
         'position': position,
+        'imageUrl': imageUrl,
       };
 
-  static String _mapCategory(List<dynamic>? cats) {
-    if (cats == null || cats.isEmpty) return 'General';
-    final first = cats.first.toString().toLowerCase();
-    if (first.contains('weather')) return 'Lifestyle';
-    if (first.contains('clock') || first.contains('time')) return 'Utilities';
-    if (first.contains('news') || first.contains('rss')) return 'News';
-    if (first.contains('calendar')) return 'Productivity';
-    if (first.contains('music') || first.contains('media')) return 'Entertainment';
-    if (first.contains('health') || first.contains('fit')) return 'Health';
-    if (first.contains('sensor') || first.contains('iot')) return 'IoT';
-    return 'General';
+  static String detectCategory({
+    required String name,
+    required String description,
+    List<dynamic>? tags,
+    String? officialCategory,
+  }) {
+    final nameLower = name.toLowerCase();
+    final descLower = description.toLowerCase();
+    final tagsList = tags?.map((e) => e.toString().toLowerCase()).toList() ?? [];
+    
+    bool has(String term) =>
+        nameLower.contains(term) ||
+        descLower.contains(term) ||
+        tagsList.any((t) => t.contains(term));
+        
+    // 1. Meteorologia
+    if (has('weather') || has('clima') || has('meteo') || has('forecast') || has('climat') || has('rain') || has('temp') || has('wind') || has('sol') || has('chuva') || has('neve')) {
+      return 'Meteorologia';
+    }
+    
+    // 2. Calendário
+    if (has('calendar') || has('todo') || has('agenda') || has('productivity') || has('clock') || has('time') || has('cron') || has('schedu') || has('date') || has('alarm') || has('horario') || has('relogio') || has('temporizador')) {
+      return 'Calendário';
+    }
+    
+    // 3. Notícias
+    if (has('news') || has('rss') || has('social') || has('history') || has('day') || has('fact') || has('feed') || has('info') || has('onthisday') || has('ephemeris') || has('efemeride') || has('efeméride') || has('reddit') || has('twitter') || has('mastodon') || has('noticias') || has('artigo')) {
+      return 'Notícias';
+    }
+    
+    // 4. Multimédia
+    if (has('music') || has('media') || has('spotify') || has('video') || has('player') || has('entertainment') || has('fun') || has('youtube') || has('vinyl') || has('radio') || has('cast') || has('album') || has('musica') || has('som')) {
+      return 'Multimédia';
+    }
+    
+    // 5. Deteção de Movimento
+    if (has('motion') || has('camera') || has('security') || has('detection') || has('pir') || has('surveill') || has('face') || has('opencv') || has('webcam') || has('cctv') || has('movimento') || has('presenca')) {
+      return 'Deteção de Movimento';
+    }
+    
+    // 6. Transportes Públicos
+    if (has('transport') || has('train') || has('bus') || has('subway') || has('metro') || has('transit') || has('flight') || has('commute') || has('autocarro') || has('comboio')) {
+      return 'Transportes Públicos';
+    }
+    
+    // 7. Casa Inteligente
+    if (has('sensor') || has('iot') || has('smart home') || has('home automation') || has('domotica') || has('smart') || has('hue') || has('device') || has('control') || has('mqtt') || has('wled') || has('ping') || has('tuya') || has('xiaomi') || has('zigbee') || has('shelly') || has('sonoff') || has('casa')) {
+      return 'Casa Inteligente';
+    }
+    
+    // 8. Desporto
+    if (has('sport') || has('fit') || has('football') || has('soccer') || has('basketball') || has('health') || has('gym') || has('workout') || has('f1') || has('formula') || has('running') || has('desporto') || has('futebol') || has('passos') || has('saude')) {
+      return 'Desporto';
+    }
+    
+    // 9. Bolsa
+    if (has('stock') || has('finance') || has('crypto') || has('bitcoin') || has('bolsa') || has('currency') || has('coin') || has('ethereum') || has('price') || has('gold') || has('silver') || has('financas') || has('moeda') || has('acoes')) {
+      return 'Bolsa';
+    }
+    
+    // 10. Controlo de Voz
+    if (has('alexa') || has('assistant') || has('google assistant') || has('microphone') || has('voicecontrol') || has('voice control') || has('voicecommand') || has('microfone')) {
+      return 'Controlo de Voz';
+    }
+    
+    // 11. Leitura de Voz
+    if (has('speech') || has('text-to-speech') || has('tts') || has('reader') || has('talk') || has('speak') || has('pronounce') || has('leitor')) {
+      return 'Leitura de Voz';
+    }
+    
+    // 12. Trânsito
+    if (has('traffic') || has('transito') || has('route') || has('travel') || has('map') || has('road') || has('navigation') || has('viagem') || has('estrada') || has('mapa')) {
+      return 'Trânsito';
+    }
+    
+    // Fallbacks baseados na categoria oficial do catálogo
+    if (officialCategory != null && officialCategory.isNotEmpty) {
+      final off = officialCategory.toLowerCase();
+      if (off.contains('weather')) return 'Meteorologia';
+      if (off.contains('calendar') || off.contains('productivity')) return 'Calendário';
+      if (off.contains('news') || off.contains('info') || off.contains('religion') || off.contains('education')) return 'Notícias';
+      if (off.contains('sport') || off.contains('health')) return 'Desporto';
+      if (off.contains('finance') || off.contains('crypto')) return 'Bolsa';
+      if (off.contains('voice')) return 'Controlo de Voz';
+      if (off.contains('transport') || off.contains('travel')) return 'Transportes Públicos';
+      if (off.contains('entertainment') || off.contains('music')) return 'Multimédia';
+    }
+    
+    return 'Geral';
   }
 
   static IconData _iconForCategory(String category) {
     switch (category) {
-      case 'Lifestyle':     return Icons.cloud;
-      case 'Utilities':    return Icons.access_time;
-      case 'News':         return Icons.newspaper;
-      case 'Productivity': return Icons.calendar_today;
-      case 'Entertainment':return Icons.music_note;
-      case 'Health':       return Icons.fitness_center;
-      case 'IoT':          return Icons.sensors;
-      default:             return Icons.widgets;
+      case 'Calendário':          return Icons.calendar_month;
+      case 'Multimédia':             return Icons.play_circle_outline;
+      case 'Deteção de Movimento':  return Icons.directions_run;
+      case 'Notícias':              return Icons.newspaper;
+      case 'Transportes Públicos':  return Icons.directions_bus_filled_outlined;
+      case 'Casa Inteligente':        return Icons.lightbulb_outline;
+      case 'Desporto':            return Icons.sports_basketball;
+      case 'Bolsa':             return Icons.show_chart;
+      case 'Leitura de Voz':    return Icons.record_voice_over;
+      case 'Trânsito':           return Icons.traffic;
+      case 'Controlo de Voz':     return Icons.mic;
+      case 'Meteorologia':           return Icons.cloud;
+      case 'Geral':
+      default:                  return Icons.widgets;
     }
   }
 }
@@ -96,7 +200,7 @@ final List<WidgetModel> demoWidgets = [
     id: 'weather',
     name: 'Weather',
     description: 'Real-time weather updates with 5-day forecast and current conditions',
-    category: 'Lifestyle',
+    category: 'Meteorologia',
     icon: Icons.cloud,
     isInstalled: false,
   ),
@@ -104,15 +208,15 @@ final List<WidgetModel> demoWidgets = [
     id: 'calendar',
     name: 'Calendar',
     description: 'Sync your events from Google Calendar, Outlook,...',
-    category: 'Productivity',
-    icon: Icons.calendar_today,
+    category: 'Calendário',
+    icon: Icons.calendar_month,
     isInstalled: true,
   ),
   WidgetModel(
     id: 'news',
     name: 'News Feed',
     description: 'Latest headlines from your favorite news sources and...',
-    category: 'News',
+    category: 'Notícias',
     icon: Icons.newspaper,
     isInstalled: false,
   ),
@@ -120,7 +224,7 @@ final List<WidgetModel> demoWidgets = [
     id: 'clock',
     name: 'Clock',
     description: 'Customizable clock with timezone support and...',
-    category: 'Utilities',
+    category: 'Calendário',
     icon: Icons.access_time,
     isInstalled: true,
   ),
@@ -128,15 +232,15 @@ final List<WidgetModel> demoWidgets = [
     id: 'music',
     name: 'Music Player',
     description: 'Control Spotify, Apple Music, or local music playback',
-    category: 'Entertainment',
-    icon: Icons.music_note,
+    category: 'Multimédia',
+    icon: Icons.play_circle_outline,
     isInstalled: false,
   ),
   WidgetModel(
     id: 'fitness',
     name: 'Fitness Tracker',
     description: 'Daily steps, calories, and workout summary from yo...',
-    category: 'Health',
+    category: 'Desporto',
     icon: Icons.fitness_center,
     isInstalled: false,
   ),
@@ -144,7 +248,7 @@ final List<WidgetModel> demoWidgets = [
     id: 'email',
     name: 'Email Inbox',
     description: 'Quick view of unread emails and notifications',
-    category: 'Productivity',
+    category: 'Calendário',
     icon: Icons.email,
     isInstalled: false,
   ),
@@ -152,7 +256,7 @@ final List<WidgetModel> demoWidgets = [
     id: 'photos',
     name: 'Photo Frame',
     description: 'Slideshow of your favorite photos from Google Photo...',
-    category: 'Lifestyle',
+    category: 'Multimédia',
     icon: Icons.photo,
     isInstalled: false,
   ),

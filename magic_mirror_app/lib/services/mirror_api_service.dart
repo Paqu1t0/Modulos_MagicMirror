@@ -149,10 +149,27 @@ class MirrorApiService {
 
   /// Catálogo público de módulos (não requer ligação ao Pi).
   Future<List<WidgetModel>> getCatalogueModules() async {
-    const catalogueUrl = 'https://mmm-rest.david-van-laere.be/api/module';
+    const catalogueUrl = 'https://modules.magicmirror.builders/data/modules.json';
+    const fallbackUrl = 'https://mmm-rest.david-van-laere.be/api/module';
+    
     try {
       final response = await http
           .get(Uri.parse(catalogueUrl))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = json.decode(response.body);
+        final List<dynamic> data = body['modules'] as List<dynamic>;
+        final modules = data
+            .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
+            .toList();
+        modules.sort((a, b) => b.stars.compareTo(a.stars));
+        return modules;
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http
+          .get(Uri.parse(fallbackUrl))
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -163,6 +180,7 @@ class MirrorApiService {
         return modules;
       }
     } catch (_) {}
+
     return demoWidgets;
   }
 
