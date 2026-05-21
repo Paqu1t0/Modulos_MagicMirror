@@ -80,45 +80,35 @@ class PresetModel {
       };
 }
 
+// Presets padrão — sem layout pré-definido para não conflituar com os módulos reais do Pi.
+// O utilizador deve configurar o layout de cada preset via o editor de Layout.
 final List<PresetModel> defaultPresets = [
   PresetModel(
     id: 'morning',
     name: 'Morning Routine',
-    description: 'Weather, calendar, and news for your morning',
-    widgetCount: 5,
+    description: 'Configura este preset com os teus módulos matinais',
+    widgetCount: 0,
     iconName: 'sunny',
     isActive: true,
-    layout: {
-      1: {'Top Left': 'clock', 'Top Right': 'weather', 'Bottom Center': 'news'},
-      2: {'Center': 'calendar'},
-      3: {'Bottom Right': 'photos'},
-    },
+    layout: null, // Sem layout — o utilizador configura via Layout Editor
   ),
   PresetModel(
     id: 'afternoon',
     name: 'Afternoon Mode',
-    description: 'Relaxed layout with photos and music',
-    widgetCount: 5,
+    description: 'Configura este preset com os teus módulos de tarde',
+    widgetCount: 0,
     iconName: 'cloudy',
     isActive: false,
-    layout: {
-      1: {'Top Left': 'clock', 'Top Center': 'music', 'Bottom Center': 'news'},
-      2: {'Center': 'photos'},
-      3: {'Bottom Right': 'fitness'},
-    },
+    layout: null,
   ),
   PresetModel(
     id: 'night',
     name: 'Night Time',
-    description: 'Minimal display with clock and ambient info',
-    widgetCount: 2,
+    description: 'Configura este preset com módulos minimalistas para a noite',
+    widgetCount: 0,
     iconName: 'night',
     isActive: false,
-    layout: {
-      1: {'Top Center': 'clock'},
-      2: {'Center': 'weather'},
-      3: {},
-    },
+    layout: null,
   ),
 ];
 

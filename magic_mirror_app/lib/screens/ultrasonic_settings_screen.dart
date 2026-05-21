@@ -60,12 +60,34 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
   Future<void> _saveSettings() async {
     setState(() => _saving = true);
 
+    // Mostrar feedback imediato enquanto o SSH trabalha
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              ),
+              SizedBox(width: 14),
+              Text('A enviar configuração para o espelho...'),
+            ],
+          ),
+          backgroundColor: AppTheme.primary,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+
     // 1. Guardar localmente
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('sensor_distance_limit', _distanceLimit);
     await prefs.setInt('sensor_active_time', _activeSeconds);
 
-    // 2. Enviar para o Raspberry Pi via SSH e reiniciar MM
+    // 2. Enviar para o Raspberry Pi via SSH
     final success = await SshService().saveUltrasonicConfig(
       distanceLimit: _distanceLimit,
       activeSeconds: _activeSeconds,
@@ -73,20 +95,25 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
 
     if (mounted) {
       setState(() => _saving = false);
+      // Fechar o snackbar de "a enviar..."
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            success 
-                ? 'Configurações do sensor guardadas e aplicadas!' 
-                : 'Erro ao guardar configurações do sensor no Magic Mirror.',
+            success
+                ? 'Guardado! Sensor a recarregar em ~2s...'
+                : 'Erro ao guardar configurações no Magic Mirror.',
           ),
           backgroundColor: success ? AppTheme.success : AppTheme.error,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

@@ -67,7 +67,7 @@ Module.register("MMM-GestorPaginas", {
             const classes = (module.data && typeof module.data.classes === "string") ? module.data.classes : "";
 
             // Módulos que devem estar SEMPRE visíveis (como o próprio gestor e o teu sensor)
-            if (module.name === "MMM-GestorPaginas" || module.name === "MMM-Ultrasonic" || classes.includes("sempre_visivel")) {
+            if (module.name === "MMM-GestorPaginas" || classes.includes("sempre_visivel")) {
                 module.show(self.config.animacao, {lockString: self.identifier});
                 return;
             }
