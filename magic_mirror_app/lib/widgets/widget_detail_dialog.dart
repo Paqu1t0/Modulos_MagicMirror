@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/widget_model.dart';
 import '../services/mirror_api_service.dart';
+import 'module_config_dialog.dart';
 
 /// Modo do diálogo: instalar (catálogo) ou gerir (instalado).
 enum WidgetDialogMode { install, manage }
@@ -265,19 +266,39 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
               )
             else if (isManage) ...[
               // ── Modo GERIR (instalado) ────────────────────────────────────
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _handleUpdate,
-                  icon: const Icon(Icons.system_update_alt, size: 18),
-                  label: const Text('Atualizar (git pull)',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _handleUpdate,
+                      icon: const Icon(Icons.system_update_alt, size: 18),
+                      label: const Text('Atualizar', style: TextStyle(fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => ModuleConfigDialog(module: widget.widget),
+                        );
+                      },
+                      icon: const Icon(Icons.settings_applications, size: 18),
+                      label: const Text('Config JSON', style: TextStyle(fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               Row(

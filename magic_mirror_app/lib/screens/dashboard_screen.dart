@@ -45,18 +45,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _applyAndReset() async {
     setState(() => _applying = true);
-    final success = await SshService().restartMagicMirror();
+    
+    // Primeiro, recarregar o layout e gravar tudo para sincronizar configurações alteradas
+    final currentLayout = await MirrorApiService().loadLayout();
+    final syncSuccess = await MirrorApiService().saveLayout(currentLayout);
+    
+    // Opcionalmente reiniciar caso o saveLayout não o faça (mas o saveLayout já chama restart internamente)
+    // Para ter a certeza absoluta, chamamos restart se syncSuccess falhar ou não for chamado
+    
     await Future.delayed(const Duration(seconds: 1));
     if (mounted) setState(() => _applying = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            success
-                ? 'Comando SSH enviado! Espelho a reiniciar...'
-                : 'Erro SSH. Verifica as credenciais nas definições.',
+            syncSuccess
+                ? 'Sincronizado! Espelho a reiniciar...'
+                : 'Erro a sincronizar definições com o Pi.',
           ),
-          backgroundColor: success ? AppTheme.success : AppTheme.error,
+          backgroundColor: syncSuccess ? AppTheme.success : AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),

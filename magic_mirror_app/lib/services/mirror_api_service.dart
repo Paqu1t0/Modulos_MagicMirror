@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -423,13 +424,68 @@ class MirrorApiService {
       cleanPages[pageNum] = cleanPageMap;
     }
     
-    return SshService().updateMagicMirrorConfig(cleanPages);
+    final configs = await getAllModuleConfigs();
+    return SshService().updateMagicMirrorConfig(cleanPages, moduleConfigs: configs);
   }
 
   /// Carrega o layout actual do Pi.
   Future<Map<int, Map<String, String>>> loadLayout() async {
     final rawLayout = await SshService().fetchLayoutFromConfig();
     return deduplicateLayout(rawLayout);
+  }
+
+  // ─── Module Advanced Configurations ────────────────────────────────────────
+
+  Future<String?> getModuleConfig(String moduleId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('config_$moduleId');
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> saveModuleConfig(String moduleId, String jsonConfig) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('config_$moduleId', jsonConfig);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Map<String, String>> getAllModuleConfigs() async {
+    final Map<String, String> configs = {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith('config_')) {
+          final moduleId = key.substring('config_'.length);
+          final configStr = prefs.getString(key);
+          if (configStr != null && configStr.isNotEmpty) {
+            configs[moduleId] = configStr;
+          }
+        }
+      }
+    } catch (_) {}
+    return configs;
+  }
+
+  Future<Map<String, dynamic>?> getModuleDefaults(String moduleId) async {
+    return SshService().fetchModuleDefaults(moduleId);
+  }
+
+  Future<String?> getModuleReadme(String moduleId) async {
+    return SshService().fetchModuleReadme(moduleId);
+  }
+
+  Future<Map<String, dynamic>?> getCurrentModuleConfig(String moduleId) async {
+    return SshService().fetchCurrentModuleConfig(moduleId);
+  }
+
+  Future<bool> uploadModuleFile(String moduleId, String fileName, Uint8List bytes, {String? subfolder}) async {
+    return SshService().uploadFile(moduleId, fileName, bytes, subfolder: subfolder);
   }
 
   // ─── Presets ───────────────────────────────────────────────────────────────

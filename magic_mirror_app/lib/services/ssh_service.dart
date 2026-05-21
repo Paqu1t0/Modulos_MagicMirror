@@ -82,6 +82,21 @@ class SshService {
     }
   }
 
+  /// Inicia uma shell interactiva
+  Future<SSHSession?> startInteractiveShell() async {
+    try {
+      // Connect to the Pi
+      final client = await _connect();
+      // Wait for a shell
+      final session = await client.shell();
+      // It's the caller's responsibility to close the session/client.
+      return session;
+    } catch (e) {
+      debugPrint('SSH Interactive Shell Error: $e');
+      return null;
+    }
+  }
+
   /// Corre um script Node.js enviando-o via stdin (node -)
   /// Evita todos os problemas de escaping de shell.
   Future<String?> _runNodeScript(String jsCode) async {
@@ -443,9 +458,22 @@ try {
   /// Atualiza o config.js para atribuir as classes de página aos módulos.
   /// Se um módulo não existe ainda no config.js, insere-o automaticamente.
   Future<bool> updateMagicMirrorConfig(
-      Map<int, Map<String, String>> pages) async {
+      Map<int, Map<String, String>> pages, {
+      Map<String, String>? moduleConfigs,
+  }) async {
     final pagesJson = json.encode(
         pages.map((k, v) => MapEntry(k.toString(), v)));
+    
+    // Converte de JSON strings back to raw maps to inject into node script
+    final parsedConfigs = <String, dynamic>{};
+    if (moduleConfigs != null) {
+      moduleConfigs.forEach((key, val) {
+        try {
+          parsedConfigs[key] = json.decode(val);
+        } catch (_) {}
+      });
+    }
+    final configsJson = json.encode(parsedConfigs);
 
     final jsScript = r"""
 const fs = require('fs');
@@ -460,6 +488,7 @@ if (!fs.existsSync(configPath)) {
 
 let content = fs.readFileSync(configPath, 'utf8');
 const pages = __PAGES_JSON__;
+const configs = __CONFIGS_JSON__;
 
 function findEnclosingObjectBounds(str, matchIndex) {
   let openBraceIndex = -1;
@@ -606,6 +635,22 @@ for (const block of blocks) {
   objectStr = objectStr.replace(/,\s*classes\s*:\s*["'].*?["']/g, '');
   objectStr = objectStr.replace(/classes\s*:\s*["'].*?["']\s*,?/g, '');
   
+  // Se existir uma configuração customizada para este módulo, remover o config antigo
+  if (configs[block.name]) {
+    const configMatch = /config\s*:\s*\{/.exec(objectStr);
+    if (configMatch) {
+      // configMatch.index + configMatch[0].length - 1 is the index of '{'
+      const bounds = findEnclosingObjectBounds(objectStr, configMatch.index + configMatch[0].length - 1);
+      if (bounds) {
+        let startIdx = configMatch.index;
+        let endIdx = bounds.end + 1;
+        while(endIdx < objectStr.length && (objectStr[endIdx] === ' ' || objectStr[endIdx] === '\n' || objectStr[endIdx] === '\r')) endIdx++;
+        if (objectStr[endIdx] === ',') endIdx++;
+        objectStr = objectStr.substring(0, startIdx) + objectStr.substring(endIdx);
+      }
+    }
+  }
+  
   if (block.newPosition && block.newPlacements && block.newPlacements.length > 0) {
     const classList = [];
     for (const pl of block.newPlacements) {
@@ -613,7 +658,14 @@ for (const block of blocks) {
       classList.push(`pagina_${pl.page}_pos_${pl.pos}`);
     }
     const classStr = classList.join(' ');
-    const newProps = `\n    position: "${block.newPosition}",\n    classes: "${classStr}",`;
+    
+    let configProp = "";
+    if (configs[block.name]) {
+      const cfgStr = JSON.stringify(configs[block.name], null, 2).split('\n').map(l => '    ' + l).join('\n').trim();
+      configProp = `\n    config: ${cfgStr},`;
+    }
+    
+    const newProps = `\n    position: "${block.newPosition}",\n    classes: "${classStr}",${configProp}`;
     objectStr = objectStr.substring(0, 1) + newProps + objectStr.substring(1);
   }
   
@@ -666,7 +718,12 @@ if (modulesToInsert.length > 0) {
       // Build the new module blocks string
       let insertStr = '';
       for (const m of modulesToInsert) {
-        insertStr += `\n    {\n      module: "${m.name}",\n      position: "${m.pos}",\n      classes: "${m.classStr}",\n    },`;
+        let configProp = "";
+        if (configs[m.name]) {
+          const cfgStr = JSON.stringify(configs[m.name], null, 2).split('\n').map(l => '      ' + l).join('\n').trim();
+          configProp = `\n      config: ${cfgStr},`;
+        }
+        insertStr += `\n    {\n      module: "${m.name}",\n      position: "${m.pos}",\n      classes: "${m.classStr}",${configProp}\n    },`;
       }
       // Insert before the closing ']'
       content = content.substring(0, arrayEnd) + insertStr + '\n  ' + content.substring(arrayEnd);
@@ -676,9 +733,14 @@ if (modulesToInsert.length > 0) {
 
 fs.writeFileSync(configPath, content, 'utf8');
 console.log(JSON.stringify({ ok: true, inserted: modulesToInsert.length }));
-""".replaceFirst('__PAGES_JSON__', pagesJson);
+"""
+        .replaceFirst('__PAGES_JSON__', pagesJson)
+        .replaceFirst('__CONFIGS_JSON__', configsJson);
 
-    final result = await _runNodeScript(jsScript);
+    // Run via tmp file to avoid bash escaping issues over SSH
+    await executeCommand("cat << 'EOF' > /tmp/update_magicmirror_config.js\n$jsScript\nEOF");
+    final result = await executeCommand("node /tmp/update_magicmirror_config.js");
+
     if (result != null) {
       try {
         final decoded = json.decode(result.trim());
@@ -686,6 +748,164 @@ console.log(JSON.stringify({ ok: true, inserted: modulesToInsert.length }));
       } catch (_) {}
     }
     return false;
+  }
+
+  Future<Map<String, dynamic>?> fetchModuleDefaults(String moduleName) async {
+    final jsScript = r"""
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const home = process.env.HOME || '/home/pi';
+const moduleFile = path.join(home, 'MagicMirror/modules/__MODULE_NAME__/__MODULE_NAME__.js');
+
+if (!fs.existsSync(moduleFile)) {
+  console.log(JSON.stringify({ error: 'file_not_found' }));
+  process.exit(0);
+}
+
+const content = fs.readFileSync(moduleFile, 'utf8');
+
+const match = /defaults\s*:\s*\{/.exec(content);
+if (match) {
+  let openBraceIndex = match.index + match[0].length - 1;
+  let balance = 1;
+  let closeBraceIndex = -1;
+  for (let i = openBraceIndex + 1; i < content.length; i++) {
+    if (content[i] === '"' || content[i] === "'" || content[i] === '`') {
+      const quote = content[i]; i++;
+      while (i < content.length && content[i] !== quote) {
+        if (content[i] === '\\') i++; i++;
+      }
+      continue;
+    }
+    if (content[i] === '{') { balance++; } 
+    else if (content[i] === '}') {
+      balance--;
+      if (balance === 0) { closeBraceIndex = i; break; }
+    }
+  }
+  
+  if (closeBraceIndex !== -1) {
+      const defaultsBlock = content.substring(openBraceIndex, closeBraceIndex + 1);
+      try {
+          const context = {};
+          vm.createContext(context);
+          const parsed = vm.runInContext('(' + defaultsBlock + ')', context);
+          console.log(JSON.stringify({ ok: true, defaults: parsed }));
+          process.exit(0);
+      } catch(e) {
+          console.log(JSON.stringify({ error: 'vm_parse_error', details: e.toString() }));
+          process.exit(0);
+      }
+  }
+}
+console.log(JSON.stringify({ error: 'no_defaults_found' }));
+""".replaceAll('__MODULE_NAME__', moduleName);
+
+    await executeCommand("cat << 'EOF' > /tmp/fetch_defaults.js\n$jsScript\nEOF");
+    final result = await executeCommand("node /tmp/fetch_defaults.js");
+    if (result != null) {
+      try {
+        final decoded = json.decode(result.trim());
+        if (decoded['ok'] == true && decoded['defaults'] != null) {
+          return decoded['defaults'] as Map<String, dynamic>;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Busca a configuração "viva" de um módulo diretamente do config.js
+  Future<Map<String, dynamic>?> fetchCurrentModuleConfig(String moduleName) async {
+    final jsScript = """
+const fs = require('fs');
+const path = require('path');
+const configPath = path.resolve(process.env.HOME || '/home/pi', 'MagicMirror/config/config.js');
+try {
+  const content = fs.readFileSync(configPath, 'utf8');
+  const m = { exports: {} };
+  const wrapper = new Function('module', 'process', '__dirname', 'require', content + '; return (typeof config !== "undefined") ? config : module.exports;');
+  const configObj = wrapper(m, process, path.dirname(configPath), require);
+  
+  if (configObj && configObj.modules) {
+    // Para módulos duplicados (ex: weather), podemos querer um critério melhor, mas para já apanhamos o 1º
+    const mod = configObj.modules.find(x => x.module === '__MODULE_NAME__');
+    if (mod && mod.config) {
+      console.log(JSON.stringify({ ok: true, config: mod.config }));
+    } else {
+      console.log(JSON.stringify({ ok: true, config: {} }));
+    }
+  } else {
+    console.log(JSON.stringify({ error: 'no_modules_array' }));
+  }
+} catch (e) {
+  console.log(JSON.stringify({ error: e.message }));
+}
+""".replaceAll('__MODULE_NAME__', moduleName);
+
+    await executeCommand("cat << 'EOF' > /tmp/fetch_current_config.js\n$jsScript\nEOF");
+    final result = await executeCommand("node /tmp/fetch_current_config.js");
+    if (result != null) {
+      try {
+        final decoded = json.decode(result.trim());
+        if (decoded['ok'] == true && decoded['config'] != null) {
+          return decoded['config'] as Map<String, dynamic>;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<String?> fetchModuleReadme(String moduleName) async {
+    final dir = '\$HOME/MagicMirror/modules/$moduleName';
+    
+    // Concatena todos os ficheiros .md (case insensitive) numa única string com divisores
+    final result = await executeCommand(
+      'shopt -s nocaseglob 2>/dev/null; '
+      'for f in "$dir"/*.md; do '
+      'if [ -f "\$f" ]; then '
+      '  echo -e "\\n\\n---\\n# \$(basename "\$f")\\n---\\n"; '
+      '  cat "\$f"; '
+      'fi; '
+      'done'
+    );
+    
+    if (result != null && result.trim().isNotEmpty) {
+      return result;
+    }
+    return null;
+  }
+
+  /// Faz upload de um ficheiro via SFTP para a pasta do módulo (opcionalmente numa sub-pasta).
+  Future<bool> uploadFile(String moduleName, String fileName, Uint8List bytes, {String? subfolder}) async {
+    try {
+      final client = await _connect();
+      final sftp = await client.sftp();
+      // Uses the configured user home directory or fallback to /home/pi
+      final home = '\$_user' == 'pi' ? '/home/pi' : '/home/\$_user';
+      
+      String targetDir = '\$home/MagicMirror/modules/$moduleName';
+      if (subfolder != null && subfolder.trim().isNotEmpty) {
+        // Ensure no weird paths, just append
+        final safeSubfolder = subfolder.trim().replaceAll('..', '');
+        targetDir = '$targetDir/$safeSubfolder';
+        
+        // Criar a sub-pasta caso não exista (via comando shell antes de usar SFTP)
+        await client.run('mkdir -p "$targetDir"');
+      }
+      
+      final remotePath = '$targetDir/$fileName';
+      
+      final file = await sftp.open(remotePath, mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate);
+      await file.writeBytes(bytes);
+      await file.close();
+      client.close();
+      return true;
+    } catch (e) {
+      debugPrint('SSH SFTP Upload Error: \$e');
+      return false;
+    }
   }
 
   // ─── Instalar / Remover / Atualizar ────────────────────────────────────────

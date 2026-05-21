@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_theme.dart';
 import 'services/mirror_api_service.dart';
 import 'services/ssh_service.dart';
@@ -10,6 +11,13 @@ import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Bloquear a rotação para retrato
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+  
   await MirrorApiService().init();
   await SshService().init();
   runApp(const MagicMirrorApp());
