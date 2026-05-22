@@ -297,10 +297,14 @@ class MirrorApiService {
 
 
   /// Catálogo público de módulos (não requer ligação ao Pi).
+  /// Os nossos módulos próprios são sempre injetados no início do catálogo.
   Future<List<WidgetModel>> getCatalogueModules() async {
     const catalogueUrl = 'https://modules.magicmirror.builders/data/modules.json';
     const fallbackUrl = 'https://mmm-rest.david-van-laere.be/api/module';
-    
+
+    // Módulos próprios — estão sempre presentes independentemente da ligação
+    final ours = demoWidgets.where((w) => w.isOurs).toList();
+
     try {
       final response = await http
           .get(Uri.parse(catalogueUrl))
@@ -312,7 +316,10 @@ class MirrorApiService {
             .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
             .toList();
         modules.sort((a, b) => b.stars.compareTo(a.stars));
-        return modules;
+        // Injeta os nossos no início, evitando duplicados
+        final publicIds = modules.map((m) => m.id.toLowerCase()).toSet();
+        final oursToInject = ours.where((o) => !publicIds.contains(o.id.toLowerCase())).toList();
+        return [...oursToInject, ...modules];
       }
     } catch (_) {}
 
@@ -326,7 +333,9 @@ class MirrorApiService {
             .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
             .toList();
         modules.sort((a, b) => b.stars.compareTo(a.stars));
-        return modules;
+        final publicIds = modules.map((m) => m.id.toLowerCase()).toSet();
+        final oursToInject = ours.where((o) => !publicIds.contains(o.id.toLowerCase())).toList();
+        return [...oursToInject, ...modules];
       }
     } catch (_) {}
 

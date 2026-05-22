@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -883,9 +884,9 @@ try {
       final client = await _connect();
       final sftp = await client.sftp();
       // Uses the configured user home directory or fallback to /home/pi
-      final home = '\$_user' == 'pi' ? '/home/pi' : '/home/\$_user';
+      final home = _user == 'pi' ? '/home/pi' : '/home/$_user';
       
-      String targetDir = '\$home/MagicMirror/modules/$moduleName';
+      String targetDir = '$home/MagicMirror/modules/$moduleName';
       if (subfolder != null && subfolder.trim().isNotEmpty) {
         // Ensure no weird paths, just append
         final safeSubfolder = subfolder.trim().replaceAll('..', '');
@@ -903,14 +904,98 @@ try {
       client.close();
       return true;
     } catch (e) {
-      debugPrint('SSH SFTP Upload Error: \$e');
+      debugPrint('SSH SFTP Upload Error: $e');
       return false;
     }
   }
 
   // ─── Instalar / Remover / Atualizar ────────────────────────────────────────
 
+  Future<bool> _deployLocalModule(String moduleName) async {
+    try {
+      // 1. Encontrar o diretório local do módulo
+      Directory localDir = Directory('Modulos_MagicMirror/$moduleName');
+      if (!localDir.existsSync()) {
+        localDir = Directory('magic_mirror_app/Modulos_MagicMirror/$moduleName');
+      }
+      if (!localDir.existsSync()) {
+        debugPrint('Diretório local do módulo $moduleName não encontrado.');
+        return false;
+      }
+
+      // 2. Conetar via SSH/SFTP
+      final client = await _connect();
+      final sftp = await client.sftp();
+      final home = _user == 'pi' ? '/home/pi' : '/home/$_user';
+      final remoteDir = '$home/MagicMirror/modules/$moduleName';
+
+      // Criar a pasta do módulo no Pi
+      await client.run('mkdir -p "$remoteDir"');
+
+      // 3. Listar ficheiros locais e fazer upload
+      final entities = localDir.listSync(recursive: true);
+      for (final entity in entities) {
+        if (entity is File) {
+          // Obter caminho relativo
+          final relativePath = entity.path
+              .replaceAll(localDir.path, '')
+              .replaceAll('\\', '/');
+          
+          // Limpar barra inicial se existir
+          final cleanRelativePath = relativePath.startsWith('/')
+              ? relativePath.substring(1)
+              : relativePath;
+
+          if (cleanRelativePath.isEmpty) continue;
+
+          // Se estiver dentro de subpastas, criar pastas remotas correspondentes
+          final parts = cleanRelativePath.split('/');
+          if (parts.length > 1) {
+            final subfolder = parts.sublist(0, parts.length - 1).join('/');
+            await client.run('mkdir -p "$remoteDir/$subfolder"');
+          }
+
+          final remoteFilePath = '$remoteDir/$cleanRelativePath';
+          final bytes = await entity.readAsBytes();
+          
+          debugPrint('A enviar $cleanRelativePath para $remoteFilePath...');
+          final file = await sftp.open(remoteFilePath,
+              mode: SftpFileOpenMode.create |
+                  SftpFileOpenMode.write |
+                  SftpFileOpenMode.truncate);
+          await file.writeBytes(bytes);
+          await file.close();
+        }
+      }
+
+      client.close();
+
+      // 4. Executar npm install se houver um package.json
+      final checkNpm = await executeCommand('[ -f "$remoteDir/package.json" ] && echo yes || echo no');
+      if (checkNpm != null && checkNpm.trim() == 'yes') {
+        debugPrint('A executar npm install para $moduleName...');
+        await executeCommand('cd "$remoteDir" && npm install --production 2>&1');
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Erro ao fazer deploy do módulo local $moduleName: $e');
+      return false;
+    }
+  }
+
   Future<bool> installModule(String repoUrl, String moduleName) async {
+    // 1. Tentar fazer deploy local se a pasta existir localmente
+    Directory localDir = Directory('Modulos_MagicMirror/$moduleName');
+    if (!localDir.existsSync()) {
+      localDir = Directory('magic_mirror_app/Modulos_MagicMirror/$moduleName');
+    }
+    if (localDir.existsSync()) {
+      debugPrint('Instalação local detetada para o módulo próprio: $moduleName');
+      return _deployLocalModule(moduleName);
+    }
+
+    // 2. Caso contrário, proceder com a instalação remota (git clone)
     final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final check =
         await executeCommand('[ -d "$dir" ] && echo exists || echo notfound');

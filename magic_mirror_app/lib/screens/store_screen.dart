@@ -27,6 +27,12 @@ final Map<String, _CategoryChipStyle> _categoryStyles = {
     border: Color(0xFF3A3A3C),
     icon: Icons.all_inclusive_rounded,
   ),
+  'Módulos Próprios': const _CategoryChipStyle(
+    bg: Color(0xFFFFF8E1),
+    text: Color(0xFFB45309),
+    border: Color(0xFFFDE68A),
+    icon: Icons.workspace_premium_rounded,
+  ),
   'Calendário': const _CategoryChipStyle(
     bg: Color(0xFFE1F5FE),
     text: Color(0xFF0277BD),
@@ -137,6 +143,7 @@ class _StoreScreenState extends State<StoreScreen>
   String _selectedCategory = 'Todos';
   final List<String> _categories = [
     'Todos',
+    'Módulos Próprios',
     'Calendário',
     'Meteorologia',
     'Notícias',
@@ -248,14 +255,18 @@ class _StoreScreenState extends State<StoreScreen>
           .where((w) =>
               (w.name.toLowerCase().contains(q) ||
                   w.description.toLowerCase().contains(q)) &&
-              (_selectedCategory == 'Todos' || w.category == _selectedCategory) &&
+              (_selectedCategory == 'Todos' ||
+               (_selectedCategory == 'Módulos Próprios' && w.isOurs) ||
+               (_selectedCategory != 'Módulos Próprios' && w.category == _selectedCategory)) &&
               // Ocultar módulos arquivados ou marcados como abandonados/outdated na loja
               !w.isArchived && (w.outdated == null || w.outdated!.isEmpty))
           .toList();
       _filteredInstalled = _installed
           .where((w) =>
               w.name.toLowerCase().contains(q) &&
-              (_selectedCategory == 'Todos' || w.category == _selectedCategory))
+              (_selectedCategory == 'Todos' ||
+               (_selectedCategory == 'Módulos Próprios' && w.isOurs) ||
+               (_selectedCategory != 'Módulos Próprios' && w.category == _selectedCategory)))
           .toList();
     });
   }
@@ -626,6 +637,58 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+// ─── "Módulos Próprios" Badge ─────────────────────────────────────────────────────────
+
+class _OursBadge extends StatelessWidget {
+  final bool compact;
+  const _OursBadge({this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 2 : 3,
+      ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.workspace_premium_rounded,
+            size: compact ? 9 : 10,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            'Módulos Próprios',
+            style: TextStyle(
+              fontSize: compact ? 8 : 9,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Catalogue Card ───────────────────────────────────────────────────────────
 
 class _CatalogueCard extends StatelessWidget {
@@ -642,7 +705,23 @@ class _CatalogueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: AppTheme.cardDecoration,
+      decoration: module.isOurs
+          ? BoxDecoration(
+              color: AppTheme.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFFDE68A),
+                width: 1.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            )
+          : AppTheme.cardDecoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -660,14 +739,23 @@ class _CatalogueCard extends StatelessWidget {
                         Container(
                           width: 42, height: 42,
                           decoration: BoxDecoration(
-                            color: AppTheme.iconBg,
+                            color: module.isOurs
+                                ? const Color(0xFFFEF3C7)
+                                : AppTheme.iconBg,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(module.icon,
-                              color: AppTheme.primary, size: 20),
+                          child: Icon(
+                            module.icon,
+                            color: module.isOurs
+                                ? const Color(0xFFD97706)
+                                : AppTheme.primary,
+                            size: 20,
+                          ),
                         ),
                         const Spacer(),
-                        if (module.isInstalled)
+                        if (module.isOurs)
+                          const _OursBadge(compact: true)
+                        else if (module.isInstalled)
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 7, vertical: 3),
@@ -700,7 +788,21 @@ class _CatalogueCard extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
                     ),
-                    if (module.stars > 0)
+                    if (module.isOurs && module.author != null)
+                      Row(
+                        children: [
+                          const Icon(Icons.people_outline_rounded,
+                              size: 11, color: Color(0xFFD97706)),
+                          const SizedBox(width: 3),
+                          Text(module.author!,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFD97706),
+                              )),
+                        ],
+                      )
+                    else if (module.stars > 0)
                       Row(
                         children: [
                           const Icon(Icons.star,
@@ -730,8 +832,14 @@ class _CatalogueCard extends StatelessWidget {
                             fontSize: 12, fontWeight: FontWeight.w600)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: const BorderSide(color: AppTheme.border),
-                      foregroundColor: AppTheme.textSecondary,
+                      side: BorderSide(
+                        color: module.isOurs
+                            ? const Color(0xFFFDE68A)
+                            : AppTheme.border,
+                      ),
+                      foregroundColor: module.isOurs
+                          ? const Color(0xFFD97706)
+                          : AppTheme.textSecondary,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
@@ -753,6 +861,9 @@ class _CatalogueCard extends StatelessWidget {
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 8),
+                      backgroundColor: module.isOurs
+                          ? const Color(0xFFD97706)
+                          : null,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
@@ -785,28 +896,64 @@ class _InstalledCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration,
+      decoration: module.isOurs
+          ? BoxDecoration(
+              color: AppTheme.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFFDE68A),
+                width: 1.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            )
+          : AppTheme.cardDecoration,
       child: Row(
         children: [
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: AppTheme.iconBg,
+              color: module.isOurs
+                  ? const Color(0xFFFEF3C7)
+                  : AppTheme.iconBg,
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(module.icon, color: AppTheme.primary, size: 22),
+            child: Icon(
+              module.icon,
+              color: module.isOurs
+                  ? const Color(0xFFD97706)
+                  : AppTheme.primary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(module.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    )),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(module.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          )),
+                    ),
+                    if (module.isOurs) ...
+                    [
+                      const SizedBox(width: 6),
+                      const _OursBadge(compact: true),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
                 if (module.position != null && module.position!.isNotEmpty)
                   Row(
                     children: [

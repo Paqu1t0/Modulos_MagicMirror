@@ -1,0 +1,132 @@
+/**
+ * MMM-BusCPT.css
+ * Estilos premium inspirados nos painéis dinâmicos da STCP e aeroportos.
+ */
+
+.mmm-buscpt-wrapper {
+    text-align: left;
+    font-family: "Outfit", "Inter", "Helvetica Neue", Arial, sans-serif;
+    color: #FFFFFF;
+    background-color: rgba(10, 10, 10, 0.75);
+    border-radius: 12px;
+    padding: 14px 18px;
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    max-width: 320px;
+    backdrop-filter: blur(8px);
+}
+
+.mmm-buscpt-header {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #FFA500; /* Laranja STCP retro-iluminado */
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    padding-bottom: 6px;
+}
+
+.mmm-buscpt-bus-icon {
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.mmm-buscpt-stop-id {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-left: auto;
+    font-weight: 500;
+}
+
+.mmm-buscpt-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.mmm-buscpt-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mmm-buscpt-row:last-child {
+    border-bottom: none;
+}
+
+.mmm-buscpt-route-cell {
+    padding: 8px 0;
+    width: 50px;
+}
+
+.mmm-buscpt-route-badge {
+    display: inline-block;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 6px;
+    text-align: center;
+    min-width: 36px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.mmm-buscpt-dest-cell {
+    padding: 8px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #E2E8F0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+.mmm-buscpt-time-cell {
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #FBBF24; /* Amarelo néon a simular LED */
+}
+
+.mmm-buscpt-time-val {
+    background-color: rgba(251, 191, 36, 0.08);
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+.mmm-buscpt-pulse-now {
+    color: #EF4444; /* Vermelho vibrante de imediato */
+    font-weight: 800;
+    animation: buscpt-blink 1.2s infinite;
+    background-color: rgba(239, 68, 68, 0.12);
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+.mmm-buscpt-loading {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.mmm-buscpt-error {
+    font-size: 12px;
+    color: #F87171;
+    font-weight: 500;
+}
+
+.mmm-buscpt-empty {
+    padding: 16px 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+}
+
+@keyframes buscpt-blink {
+    0% { opacity: 1.0; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1.0; }
+}

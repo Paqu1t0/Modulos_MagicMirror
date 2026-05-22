@@ -1,0 +1,111 @@
+/* MMM-GoogleCalendar.css */
+
+.mmm-gcal-wrapper {
+    min-width: 240px;
+    max-width: 340px;
+    padding: 4px 0;
+}
+
+.mmm-gcal-header {
+    font-size: 0.88em;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.mmm-gcal-icon {
+    font-size: 1em;
+}
+
+.mmm-gcal-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mmm-gcal-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 9px 11px;
+    border-left: 3px solid #4285F4;
+    animation: gcal-fadein 0.4s ease;
+}
+
+@keyframes gcal-fadein {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.mmm-gcal-date-tag {
+    font-size: 0.65em;
+    font-weight: 800;
+    color: #4285F4;
+    background: rgba(66, 133, 244, 0.12);
+    border-radius: 6px;
+    padding: 4px 7px;
+    text-align: center;
+    min-width: 46px;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+    margin-top: 1px;
+}
+
+.mmm-gcal-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.mmm-gcal-title {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.mmm-gcal-time {
+    font-size: 0.7em;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 1px;
+}
+
+.mmm-gcal-location {
+    font-size: 0.68em;
+    color: rgba(255,255,255,0.4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mmm-gcal-empty {
+    font-size: 0.78em;
+    color: rgba(255,255,255,0.4);
+    text-align: center;
+    padding: 10px;
+    font-style: italic;
+}
+
+.mmm-gcal-loading,
+.mmm-gcal-error {
+    font-size: 0.78em;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    padding: 8px;
+}
+
+.mmm-gcal-error {
+    color: #f87171;
+}

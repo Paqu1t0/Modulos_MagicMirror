@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,7 +11,7 @@ import 'interactive_terminal.dart';
 class ModuleConfigDialog extends StatefulWidget {
   final WidgetModel module;
 
-  const ModuleConfigDialog({Key? key, required this.module}) : super(key: key);
+  const ModuleConfigDialog({super.key, required this.module});
 
   @override
   State<ModuleConfigDialog> createState() => _ModuleConfigDialogState();
