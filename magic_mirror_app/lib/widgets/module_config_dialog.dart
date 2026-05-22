@@ -28,6 +28,9 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
   Map<String, dynamic> _currentConfig = {};
   String? _readmeContent;
   
+  // Controllers for dynamic text fields
+  final Map<String, TextEditingController> _textControllers = {};
+  
   // Fallback to raw JSON if needed
   bool _useRawJson = false;
   final _rawJsonController = TextEditingController();
@@ -45,6 +48,15 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
     if (widget.module.id == 'MMM-PhotoSlideshow') {
       _loadGallery();
     }
+  }
+
+  @override
+  void dispose() {
+    _rawJsonController.dispose();
+    for (var controller in _textControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadGallery() async {
@@ -504,6 +516,11 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
             // Strings or anything else
             final isRefreshToken = widget.module.id == 'MMM-SpotifyNowPlaying' && key == 'refreshToken';
             final hasToken = _currentConfig['refreshToken'] != null && _currentConfig['refreshToken'].toString().trim().isNotEmpty;
+            final isBusStopId = widget.module.id == 'MMM-BusCPT' && key == 'stopId';
+
+            if (!_textControllers.containsKey(key)) {
+              _textControllers[key] = TextEditingController(text: val?.toString() ?? '');
+            }
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -512,7 +529,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                 children: [
                   TextFormField(
                     key: ValueKey(key),
-                    initialValue: val?.toString(),
+                    controller: _textControllers[key],
                     style: TextStyle(color: AppTheme.textPrimary),
                     decoration: InputDecoration(
                       labelText: key,
@@ -529,6 +546,21 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                       });
                     },
                   ),
+                  if (isBusStopId && !_useRawJson)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.search),
+                        label: const Text('Procurar Paragem STCP', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _showStcpSearchDialog(key),
+                      ),
+                    ),
                   if (isRefreshToken && !hasToken && !_useRawJson)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
@@ -550,6 +582,136 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
           }
         }).toList(),
       ],
+    );
+  }
+
+  Future<void> _showStcpSearchDialog(String configKey) async {
+    final searchController = TextEditingController();
+    bool isSearching = false;
+    List<dynamic> results = [];
+    String? searchError;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> doSearch() async {
+            final query = searchController.text.trim();
+            if (query.length < 3) {
+              setDialogState(() {
+                searchError = "Escreve pelo menos 3 letras";
+                results = [];
+              });
+              return;
+            }
+
+            setDialogState(() {
+              isSearching = true;
+              searchError = null;
+            });
+
+            try {
+              final response = await http.get(Uri.parse('https://stcp.pt/api/stops?search=${Uri.encodeComponent(query)}'));
+              if (response.statusCode == 200) {
+                final data = json.decode(response.body);
+                setDialogState(() {
+                  results = data['results'] ?? [];
+                  if (results.isEmpty) searchError = "Nenhuma paragem encontrada.";
+                });
+              } else {
+                setDialogState(() => searchError = "Erro na STCP: ${response.statusCode}");
+              }
+            } catch (e) {
+              setDialogState(() => searchError = "Erro de rede: $e");
+            } finally {
+              setDialogState(() => isSearching = false);
+            }
+          }
+
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: AppTheme.surface,
+            title: Text('Procurar Paragem STCP', style: TextStyle(color: Colors.white)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: searchController,
+                          style: TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Ex: Batalha, Trindade, Hospital...',
+                            hintStyle: TextStyle(color: Colors.white38),
+                            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppTheme.accent)),
+                            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                          ),
+                          onSubmitted: (_) => doSearch(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.search, color: AppTheme.accent),
+                        onPressed: doSearch,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (isSearching)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  if (searchError != null)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(searchError!, style: const TextStyle(color: Colors.red)),
+                    ),
+                  if (!isSearching && results.isNotEmpty)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: 300),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: results.length,
+                        itemBuilder: (context, index) {
+                          final stop = results[index];
+                          // STCP returns e.g. "text": "1º De Dezembro (PDZ3)"
+                          return ListTile(
+                            leading: const Icon(Icons.directions_bus, color: AppTheme.accent),
+                            title: Text(stop['text'] ?? stop['stop_name'] ?? 'Desconhecida', style: TextStyle(color: Colors.white)),
+                            subtitle: Text('ID: ${stop['stop_id'] ?? stop['id']}', style: TextStyle(color: Colors.white54)),
+                            onTap: () {
+                              final selectedId = stop['stop_id'] ?? stop['id'];
+                              if (selectedId != null && selectedId != '.') {
+                                setState(() {
+                                  _currentConfig[configKey] = selectedId.toString();
+                                  if (_textControllers.containsKey(configKey)) {
+                                    _textControllers[configKey]!.text = selectedId.toString();
+                                  }
+                                });
+                                // Force reconstruction of the dynamic form by updating the key
+                                Navigator.pop(ctx);
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

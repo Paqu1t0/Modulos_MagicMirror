@@ -133,13 +133,26 @@ Module.register("MMM-BusCPT", {
             tdTime.className = "mmm-buscpt-time-cell align-right";
 
             const minutes = arrival.arrival_minutes;
-            if (minutes === 0 || minutes === null) {
-                tdTime.innerHTML = '<span class="mmm-buscpt-pulse-now">A chegar</span>';
-            } else if (minutes === 1) {
-                tdTime.innerHTML = '<span class="mmm-buscpt-pulse-now">1 min</span>';
-            } else {
-                tdTime.innerHTML = `<span class="mmm-buscpt-time-val">${minutes} min</span>`;
+            let timeHtml = "";
+            let absoluteTimeHtml = "";
+
+            if (minutes !== null) {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + minutes);
+                const hrs = now.getHours().toString().padStart(2, '0');
+                const mins = now.getMinutes().toString().padStart(2, '0');
+                absoluteTimeHtml = `<div class="mmm-buscpt-abs-time"><i class="fa fa-clock-o"></i> ${hrs}:${mins}</div>`;
             }
+
+            if (minutes === 0 || minutes === null) {
+                timeHtml = '<span class="mmm-buscpt-pulse-now">A chegar</span>';
+            } else if (minutes === 1) {
+                timeHtml = '<span class="mmm-buscpt-pulse-now">1 min</span>';
+            } else {
+                timeHtml = `<span class="mmm-buscpt-time-val">${minutes} min</span>`;
+            }
+
+            tdTime.innerHTML = `${timeHtml}${absoluteTimeHtml}`;
             tr.appendChild(tdTime);
 
             table.appendChild(tr);

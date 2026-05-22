@@ -22,16 +22,32 @@ module.exports = NodeHelper.create({
             return;
         }
 
-        // Yahoo Finance v8 — endpoint público sem autenticação
-        const symbolsParam = encodeURIComponent(symbols.join(","));
-        const path = `/v8/finance/spark?symbols=${symbolsParam}&range=1d&interval=1d`;
+        let parsedSymbols = symbols;
+        if (typeof symbols === "string") {
+            // Caso venha como string tipo "[AAPL, MSFT]" ou "AAPL, MSFT"
+            parsedSymbols = symbols.replace(/[\[\]'"]/g, '').split(',');
+        }
 
-        // Usar o endpoint quote para dados mais ricos
-        const quotePath = `/v7/finance/quote?symbols=${symbolsParam}&fields=shortName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,currency`;
+        if (!Array.isArray(parsedSymbols)) {
+            parsedSymbols = [parsedSymbols];
+        }
+
+        // Use a Set to remove any duplicate symbols the user might have accidentally entered
+        const cleanSymbols = [...new Set(parsedSymbols.map(s => s.trim().toUpperCase()).filter(s => s))];
+        if (cleanSymbols.length === 0) {
+            this.sendSocketNotification("BOLSA_ERROR", { error: "Formato de símbolos inválido." });
+            return;
+        }
+
+        // Yahoo Finance v8 — endpoint público sem autenticação
+        const symbolsParam = encodeURIComponent(cleanSymbols.join(","));
+        // Usar range=5d para garantir que temos sempre dados históricos suficientes para
+        // desenhar a linha do gráfico, mesmo que o mercado tenha acabado de abrir ou seja fim de semana!
+        const path = `/v8/finance/spark?symbols=${symbolsParam}&range=5d&interval=15m`;
 
         const options = {
             hostname: "query1.finance.yahoo.com",
-            path: quotePath,
+            path: path,
             method: "GET",
             headers: {
                 "User-Agent": "Mozilla/5.0 (compatible; MagicMirror/1.0)",
@@ -45,30 +61,54 @@ module.exports = NodeHelper.create({
             res.on("end", () => {
                 try {
                     const json = JSON.parse(data);
-                    const result = json?.quoteResponse?.result;
-
-                    if (!result || result.length === 0) {
-                        this.sendSocketNotification("BOLSA_ERROR", {
-                            error: "Sem dados da Yahoo Finance. Verifica os símbolos.",
-                        });
-                        return;
+                    const quotes = [];
+                    
+                    for (const sym of cleanSymbols) {
+                        const q = json[sym];
+                        if (q && q.close && q.close.length > 0) {
+                            let currentPrice = null;
+                            for (let i = q.close.length - 1; i >= 0; i--) {
+                                if (q.close[i] !== null) {
+                                    currentPrice = q.close[i];
+                                    break;
+                                }
+                            }
+                            
+                            if (currentPrice !== null) {
+                                const prevClose = q.chartPreviousClose || q.previousClose || currentPrice;
+                                const change = currentPrice - prevClose;
+                                const changePercent = (change / prevClose) * 100;
+                                
+                                quotes.push({
+                                    symbol: q.symbol || sym,
+                                    shortName: q.symbol || sym,
+                                    price: currentPrice,
+                                    change: change,
+                                    changePercent: changePercent,
+                                    currency: "USD",
+                                    marketState: "REGULAR",
+                                    history: q.close || [], // Array de preços do dia
+                                    timestamps: q.timestamp || [], // Array de tempo
+                                });
+                            }
+                        } else {
+                            console.log("MMM-BolsaTicker: Símbolo não encontrado ou sem dados: " + sym);
+                        }
                     }
 
-                    const quotes = result.map((q) => ({
-                        symbol: q.symbol,
-                        shortName: q.shortName || q.longName || q.symbol,
-                        price: q.regularMarketPrice,
-                        change: q.regularMarketChange,
-                        changePercent: q.regularMarketChangePercent,
-                        currency: q.currency || "USD",
-                        marketState: q.marketState, // REGULAR | PRE | POST | CLOSED
-                    }));
+                    if (quotes.length === 0) {
+                        this.sendSocketNotification("BOLSA_ERROR", {
+                            error: "Sem dados da Yahoo Finance. Verifica os símbolos ou a ligação.",
+                        });
+                        console.error("MMM-BolsaTicker Resposta Yahoo:", data);
+                        return;
+                    }
 
                     this.sendSocketNotification("BOLSA_QUOTES", { quotes });
                     console.log("MMM-BolsaTicker: " + quotes.length + " cotação(ões) recebida(s).");
                 } catch (e) {
                     this.sendSocketNotification("BOLSA_ERROR", {
-                        error: "Erro ao parsear resposta: " + e.message,
+                        error: "Erro ao parsear resposta da Bolsa: " + e.message,
                     });
                 }
             });

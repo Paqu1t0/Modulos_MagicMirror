@@ -130,3 +130,10 @@
     50% { opacity: 0.3; }
     100% { opacity: 1.0; }
 }
+
+.mmm-buscpt-abs-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 4px;
+    font-weight: 500;
+}
