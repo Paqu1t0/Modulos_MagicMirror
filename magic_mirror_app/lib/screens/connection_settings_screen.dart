@@ -99,7 +99,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        title: const Text(
+        title: Text(
           'Conexão do Espelho',
           style: TextStyle(
             color: AppTheme.textPrimary,
@@ -108,7 +108,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -118,12 +118,12 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Definições de Rede e SSH',
                 style: AppTheme.headingMedium,
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Configure a ligação local e o acesso SSH para que a aplicação possa enviar comandos ao Raspberry Pi.',
                 style: AppTheme.bodyMedium,
               ),
@@ -147,7 +147,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
                           child: const Icon(Icons.router, color: AppTheme.primary, size: 20),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
+                        Text(
                           'Credenciais de Ligação',
                           style: TextStyle(
                             fontSize: 15,
@@ -158,7 +158,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    const Divider(color: AppTheme.border, height: 1),
+                    Divider(color: AppTheme.border, height: 1),
                     const SizedBox(height: 18),
                     
                     _buildField(
@@ -269,7 +269,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
                           child: const Icon(Icons.info_outline, color: AppTheme.primary, size: 20),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
+                        Text(
                           'Como configurar a rede',
                           style: TextStyle(
                             fontSize: 15,
@@ -280,7 +280,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    const Divider(color: AppTheme.border, height: 1),
+                    Divider(color: AppTheme.border, height: 1),
                     const SizedBox(height: 18),
                     _buildStep('1', 'Descobre o IP do Pi executando no terminal: hostname -I'),
                     _buildStep('2', 'Certifica-te que o telemóvel e o Magic Mirror estão ligados à mesma rede Wi-Fi.'),
@@ -305,7 +305,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(
+        Text(label, style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppTheme.textSecondary,
@@ -321,10 +321,10 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
             controller: controller,
             keyboardType: keyboardType,
             obscureText: obscureText,
-            style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+            style: TextStyle(fontSize: 14, color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+              hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 14),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             ),

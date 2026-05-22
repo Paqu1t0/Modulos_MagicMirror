@@ -324,7 +324,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Text(
                   'Slot: $position',
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
                 ),
               ),
               const Divider(),
@@ -499,7 +499,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   ),
                 ),
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Text(
                   'Guardar como Preset',
@@ -516,7 +516,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                   _showCreatePresetFromLayoutDialog();
                 },
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Text(
                   'Ou sobregravar um preset existente:',
@@ -609,41 +609,41 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
             return AlertDialog(
               backgroundColor: AppTheme.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Criar Preset do Layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+              title: Text('Criar Preset do Layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameController,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       decoration: InputDecoration(
                         hintText: 'ex: Fim de Semana',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 14),
                         filled: true,
                         fillColor: AppTheme.background,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: descController,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       decoration: InputDecoration(
                         hintText: 'ex: Fotos e música para relaxar',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 14),
                         filled: true,
                         fillColor: AppTheme.background,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -662,7 +662,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+                  child: Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -775,7 +775,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                     children: [
                       if (widget.presetToEdit != null) ...[
                         IconButton(
-                          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+                          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
                           onPressed: () => Navigator.of(context).pop(),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
@@ -807,7 +807,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                           if (widget.presetToEdit == null)
                             IconButton(
                               onPressed: _loadAll,
-                              icon: const Icon(Icons.refresh, color: AppTheme.textMuted),
+                              icon: Icon(Icons.refresh, color: AppTheme.textMuted),
                               tooltip: 'Recarregar do Pi',
                             ),
                           if (widget.presetToEdit == null)
@@ -1119,7 +1119,7 @@ class _LayoutCell extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           widgets[0].name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.textSecondary,
@@ -1143,7 +1143,7 @@ class _LayoutCell extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   widgets[0].name,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 8,
                                     fontWeight: FontWeight.w600,
                                     color: AppTheme.textSecondary,
@@ -1164,7 +1164,7 @@ class _LayoutCell extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   widgets[1].name,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 8,
                                     fontWeight: FontWeight.w600,
                                     color: AppTheme.textSecondary,
@@ -1182,7 +1182,7 @@ class _LayoutCell extends StatelessWidget {
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, color: AppTheme.textMuted, size: 18),
+                    Icon(Icons.add, color: AppTheme.textMuted, size: 18),
                     const SizedBox(height: 2),
                     Text(
                       position,
@@ -1229,7 +1229,7 @@ class _ActiveWidgetRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.name, style: const TextStyle(
+                Text(widget.name, style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary,
                 )),
                 if (widget.position != null)
@@ -1325,7 +1325,7 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
                 ),
                 child: TextField(
                   autofocus: false,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Pesquisar widget...',
                     prefixIcon: Icon(Icons.search, color: AppTheme.textMuted, size: 20),
                     border: InputBorder.none,
@@ -1361,7 +1361,7 @@ class _WidgetPickerSheetState extends State<_WidgetPickerSheet> {
                     ),
                     child: Icon(w.icon, color: AppTheme.primary, size: 20),
                   ),
-                  title: Text(w.name, style: const TextStyle(
+                  title: Text(w.name, style: TextStyle(
                     fontWeight: FontWeight.w600, color: AppTheme.textPrimary,
                   )),
                   subtitle: Text(

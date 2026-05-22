@@ -122,7 +122,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        title: const Text(
+        title: Text(
           'Sensor Ultrassónico',
           style: TextStyle(
             color: AppTheme.textPrimary,
@@ -131,7 +131,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -143,12 +143,12 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Deteção de Presença',
                       style: AppTheme.headingMedium,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Ajuste a sensibilidade do sensor de proximidade. O espelho liga-se quando alguém se aproxima e desliga-se após a ausência programada.',
                       style: AppTheme.bodyMedium,
                     ),
@@ -184,7 +184,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text(
                                   'Estado do Sensor',
                                   style: TextStyle(
@@ -243,7 +243,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                                 child: const Icon(Icons.straighten, color: Colors.blue, size: 20),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
+                              Text(
                                 'Distância de Ativação',
                                 style: TextStyle(
                                   fontSize: 15,
@@ -254,16 +254,16 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                             ],
                           ),
                           const SizedBox(height: 16),
-                          const Divider(color: AppTheme.border, height: 1),
+                          Divider(color: AppTheme.border, height: 1),
                           const SizedBox(height: 20),
                           
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Distância limite:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+                              Text('Distância limite:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
                               Text(
                                 '${_distanceLimit.toInt()} cm / ${(_distanceLimit / 100).toStringAsFixed(1)} metros',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.textPrimary,
@@ -327,10 +327,10 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                               ],
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: const [
+                            children: [
                               Text('10cm (Ultra-sensível)', style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
                               Text('300cm (Longe)', style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
                             ],
@@ -358,7 +358,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                                 child: const Icon(Icons.timer_outlined, color: Colors.deepPurple, size: 20),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
+                              Text(
                                 'Tempo Ativo Sem Ninguém',
                                 style: TextStyle(
                                   fontSize: 15,
@@ -369,16 +369,16 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                             ],
                           ),
                           const SizedBox(height: 16),
-                          const Divider(color: AppTheme.border, height: 1),
+                          Divider(color: AppTheme.border, height: 1),
                           const SizedBox(height: 20),
                           
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Tempo para desligar:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+                              Text('Tempo para desligar:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
                               Text(
                                 '$_activeSeconds s / ${(_activeSeconds >= 60) ? '${(_activeSeconds / 60).floor()}m ${_activeSeconds % 60}s' : '$_activeSeconds segundos'}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.textPrimary,
@@ -410,7 +410,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                           ),
                           
                           const SizedBox(height: 12),
-                          const Text(
+                          Text(
                             'Predefinições Rápidas:',
                             style: TextStyle(
                               fontSize: 12,

@@ -102,7 +102,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: AppTheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Preset sem layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+          title: Text('Preset sem layout', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -111,7 +111,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
               Text(
                 'O preset "${preset.name}" ainda não tem um layout configurado.\n\n'
                 'Toca no preset para abrir o editor de layout e adicionar os teus módulos.',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -119,7 +119,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+              child: Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -182,41 +182,41 @@ class _PresetsScreenState extends State<PresetsScreen> {
             return AlertDialog(
               backgroundColor: AppTheme.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Criar Novo Preset', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+              title: Text('Criar Novo Preset', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Nome', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameController,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       decoration: InputDecoration(
                         hintText: 'ex: Fim de Semana',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 14),
                         filled: true,
                         fillColor: AppTheme.background,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Descrição', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: descController,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: AppTheme.textPrimary),
                       decoration: InputDecoration(
                         hintText: 'ex: Fotos e música para relaxar',
-                        hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                        hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 14),
                         filled: true,
                         fillColor: AppTheme.background,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text('Escolher Ícone', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -235,7 +235,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
+                  child: Text('Cancelar', style: TextStyle(color: AppTheme.textMuted)),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -334,7 +334,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
             preset.name,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: 18,
@@ -346,7 +346,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
             children: [
               Text(
                 preset.description,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 14,
                 ),
@@ -354,13 +354,13 @@ class _PresetsScreenState extends State<PresetsScreen> {
               const SizedBox(height: 6),
               Text(
                 '${preset.widgetCount} widgets configurados',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppTheme.textMuted,
                   fontSize: 12,
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Opções do Preset:',
                 style: TextStyle(
                   color: AppTheme.textSecondary,
@@ -431,7 +431,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text(
                               'Sobregravar com o layout live',
                               style: TextStyle(
@@ -507,7 +507,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Fechar', style: TextStyle(color: AppTheme.textMuted)),
+              child: Text('Fechar', style: TextStyle(color: AppTheme.textMuted)),
             ),
           ],
         );
@@ -537,7 +537,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                         children: [
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text('Presets', style: AppTheme.headingLarge),
                               SizedBox(height: 4),
                               Text('Guarde e alterne entre layouts', style: AppTheme.bodyMedium),
@@ -561,7 +561,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
                       // Active Preset card
                       if (_activePreset != null) ...[
-                        const Text('Preset Ativo', style: TextStyle(
+                        Text('Preset Ativo', style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textSecondary,
@@ -576,7 +576,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                       ],
 
                       // All Presets
-                      const Text('Todos os Presets', style: TextStyle(
+                      Text('Todos os Presets', style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textSecondary,
@@ -727,7 +727,7 @@ class _PresetListItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(preset.name, style: const TextStyle(
+                      Text(preset.name, style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimary,
@@ -750,7 +750,7 @@ class _PresetListItem extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    side: const BorderSide(color: AppTheme.border),
+                    side: BorderSide(color: AppTheme.border),
                     foregroundColor: AppTheme.textPrimary,
                   ),
                   child: const Text(

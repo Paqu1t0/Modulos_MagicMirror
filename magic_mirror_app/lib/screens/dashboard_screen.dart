@@ -87,7 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Header
-                      const Text('Magic Mirror', style: AppTheme.headingLarge),
+                      Text('Magic Mirror', style: AppTheme.headingLarge),
                       const SizedBox(height: 4),
                       Text('Control Center', style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary)),
                       const SizedBox(height: 28),
@@ -97,7 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 24),
 
                       // Quick Stats
-                      const Text('Quick Stats', style: AppTheme.headingMedium),
+                      Text('Quick Stats', style: AppTheme.headingMedium),
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -232,7 +232,7 @@ class _MirrorStatusCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Mirror Status', style: TextStyle(
+                    Text('Mirror Status', style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
@@ -268,7 +268,7 @@ class _MirrorStatusCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          const Divider(color: AppTheme.border, height: 1),
+          Divider(color: AppTheme.border, height: 1),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -353,7 +353,7 @@ class _StatusIndicator extends StatelessWidget {
       children: [
         Icon(icon, size: 22, color: active ? AppTheme.primary : AppTheme.textMuted),
         const SizedBox(height: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+        Text(label, style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
       ],
     );
   }

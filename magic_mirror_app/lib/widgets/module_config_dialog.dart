@@ -171,18 +171,18 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
         final ctrl = TextEditingController();
         return AlertDialog(
           backgroundColor: AppTheme.surface,
-          title: const Text('Sub-pasta de destino', style: TextStyle(color: AppTheme.textPrimary)),
+          title: Text('Sub-pasta de destino', style: TextStyle(color: AppTheme.textPrimary)),
           content: TextField(
             controller: ctrl,
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(
+            style: TextStyle(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
               hintText: 'Ex: public, images (Deixa em branco para a raiz)',
               hintStyle: TextStyle(color: AppTheme.textMuted),
             ),
           ),
           actions: [
             TextButton(
-              child: const Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
+              child: Text('Cancelar', style: TextStyle(color: AppTheme.textSecondary)),
               onPressed: () {
                 Navigator.pop(ctx);
                 subfolder = null; // flag as cancelled
@@ -237,7 +237,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
 
   Widget _buildDynamicForm() {
     if (_defaults == null || _defaults!.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Text(
@@ -256,8 +256,8 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
         
         if (val is bool) {
           return SwitchListTile(
-            title: Text(key, style: const TextStyle(color: AppTheme.textPrimary)),
-            activeColor: AppTheme.accent,
+            title: Text(key, style: TextStyle(color: AppTheme.textPrimary)),
+            activeThumbColor: AppTheme.accent,
             value: val,
             contentPadding: EdgeInsets.zero,
             onChanged: (newVal) {
@@ -270,10 +270,10 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
             child: TextFormField(
               initialValue: val.toString(),
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 labelText: key,
-                labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                labelStyle: TextStyle(color: AppTheme.textSecondary),
                 border: const OutlineInputBorder(),
                 focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppTheme.accent)),
               ),
@@ -291,10 +291,10 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: TextFormField(
               initialValue: val.toString(),
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 labelText: key,
-                labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                labelStyle: TextStyle(color: AppTheme.textSecondary),
                 border: const OutlineInputBorder(),
                 focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppTheme.accent)),
               ),
@@ -318,12 +318,12 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
       child: TextField(
         controller: _rawJsonController,
         maxLines: 10,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'monospace',
           color: AppTheme.textPrimary,
           fontSize: 14,
         ),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           border: InputBorder.none,
           contentPadding: EdgeInsets.all(12),
           hintText: '{\n  "clientId": "123",\n  "clientSecret": "456"\n}',
@@ -344,10 +344,10 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Modo Avançado (JSON)', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                  Text('Modo Avançado (JSON)', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                   Switch(
                     value: _useRawJson,
-                    activeColor: AppTheme.accent,
+                    activeThumbColor: AppTheme.accent,
                     onChanged: (v) {
                       setState(() {
                         if (v) {
@@ -385,7 +385,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
 
   Widget _buildReadmeTab() {
     if (_readmeContent == null) {
-      return const Center(
+      return Center(
         child: Text(
           'Documentação não encontrada para este módulo.',
           style: TextStyle(color: AppTheme.textSecondary),
@@ -426,12 +426,12 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                 if (href != null) _launchUrl(href);
               },
               styleSheet: MarkdownStyleSheet(
-                h1: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
-                h2: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-                h3: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                p: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                h1: TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
+                h2: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                h3: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                p: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
                 a: const TextStyle(color: AppTheme.accent, decoration: TextDecoration.underline),
-                code: const TextStyle(backgroundColor: AppTheme.iconBg, color: AppTheme.primaryDark, fontFamily: 'monospace'),
+                code: TextStyle(backgroundColor: AppTheme.iconBg, color: AppTheme.primaryDark, fontFamily: 'monospace'),
                 codeblockDecoration: BoxDecoration(
                   color: AppTheme.iconBg,
                   borderRadius: BorderRadius.circular(4),
@@ -469,7 +469,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                     Expanded(
                       child: Text(
                         'Config: ${widget.module.name}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -488,7 +488,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                 const SizedBox(height: 16),
                 
                 // Tabs
-                const TabBar(
+                TabBar(
                   labelColor: AppTheme.accent,
                   unselectedLabelColor: AppTheme.textSecondary,
                   indicatorColor: AppTheme.accent,

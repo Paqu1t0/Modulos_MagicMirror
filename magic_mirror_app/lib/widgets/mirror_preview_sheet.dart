@@ -14,7 +14,7 @@ class MirrorPreviewSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasRealImage = module.imageUrl != null;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -56,7 +56,7 @@ class MirrorPreviewSheet extends StatelessWidget {
                     children: [
                       Text(
                         module.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: AppTheme.textPrimary,
@@ -65,7 +65,7 @@ class MirrorPreviewSheet extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         hasRealImage ? 'Captura de Ecrã Real' : 'Simulador de Widget (Tempo Real)',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppTheme.textMuted,
                           fontWeight: FontWeight.w500,
@@ -78,8 +78,8 @@ class MirrorPreviewSheet extends StatelessWidget {
                 // Botão elegante de Voltar atrás
                 TextButton.icon(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: AppTheme.textSecondary),
-                  label: const Text(
+                  icon: Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: AppTheme.textSecondary),
+                  label: Text(
                     'Voltar',
                     style: TextStyle(
                       fontSize: 14,
@@ -2035,8 +2035,9 @@ class _DetailedPreviewCardState extends State<_DetailedPreviewCard>
             String label = f == 'gasolina' ? 'Gasolina' : (f == 'gasoleo' ? 'Gasóleo' : 'GPL');
             
             Color tabColor;
-            if (f == 'gasolina') tabColor = const Color(0xFF10B981);
-            else if (f == 'gasoleo') tabColor = const Color(0xFFFBBF24);
+            if (f == 'gasolina') {
+              tabColor = const Color(0xFF10B981);
+            } else if (f == 'gasoleo') tabColor = const Color(0xFFFBBF24);
             else tabColor = const Color(0xFF3B82F6);
 
             return InkWell(

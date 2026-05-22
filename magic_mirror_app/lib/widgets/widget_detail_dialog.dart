@@ -89,7 +89,7 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirmar Remoção', style: TextStyle(color: AppTheme.textPrimary)),
+        title: Text('Confirmar Remoção', style: TextStyle(color: AppTheme.textPrimary)),
         content: Text(
           'Tens a certeza que queres remover "${widget.widget.name}"?\nEsta ação apaga a pasta do módulo no Pi.',
           style: AppTheme.bodyMedium,
@@ -210,7 +210,7 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.link, size: 14, color: AppTheme.textMuted),
+                  Icon(Icons.link, size: 14, color: AppTheme.textMuted),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(w.repoUrl!, style: AppTheme.bodySmall,
@@ -309,7 +309,7 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        side: const BorderSide(color: AppTheme.border),
+                        side: BorderSide(color: AppTheme.border),
                         foregroundColor: AppTheme.textSecondary,
                       ),
                       child: const Text('Fechar', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -341,7 +341,7 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        side: const BorderSide(color: AppTheme.border),
+                        side: BorderSide(color: AppTheme.border),
                         foregroundColor: AppTheme.textSecondary,
                       ),
                       child: const Text('Fechar', style: TextStyle(fontWeight: FontWeight.w600)),

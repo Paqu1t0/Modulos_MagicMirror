@@ -9,7 +9,7 @@ import '../app_theme.dart';
 class InteractiveTerminal extends StatefulWidget {
   final String initialCommand;
 
-  const InteractiveTerminal({Key? key, required this.initialCommand}) : super(key: key);
+  const InteractiveTerminal({super.key, required this.initialCommand});
 
   @override
   State<InteractiveTerminal> createState() => _InteractiveTerminalState();
@@ -179,8 +179,8 @@ class _InteractiveTerminalState extends State<InteractiveTerminal> {
               child: TextField(
                 controller: _inputController,
                 focusNode: _focusNode,
-                style: const TextStyle(color: AppTheme.textPrimary, fontFamily: 'monospace'),
-                decoration: const InputDecoration(
+                style: TextStyle(color: AppTheme.textPrimary, fontFamily: 'monospace'),
+                decoration: InputDecoration(
                   hintText: 'Escreve o comando e clica Enter...',
                   hintStyle: TextStyle(color: AppTheme.textSecondary),
                   border: OutlineInputBorder(),

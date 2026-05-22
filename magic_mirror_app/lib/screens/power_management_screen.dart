@@ -166,7 +166,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        title: const Text(
+        title: Text(
           'Gestão de Energia',
           style: TextStyle(
             color: AppTheme.textPrimary,
@@ -175,7 +175,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -187,12 +187,12 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Poupança e Controlo do Ecrã',
                       style: AppTheme.headingMedium,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Poupe energia configurando o modo sleep manual ou definindo um agendamento para desligar o espelho automaticamente.',
                       style: AppTheme.bodyMedium,
                     ),
@@ -221,7 +221,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Modo Sleep Manual',
                                   style: TextStyle(
                                     fontSize: 15,
@@ -266,7 +266,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
                                 child: const Icon(Icons.schedule, color: AppTheme.primary, size: 20),
                               ),
                               const SizedBox(width: 12),
-                              const Text(
+                              Text(
                                 'Agendamento Diário',
                                 style: TextStyle(
                                   fontSize: 15,
@@ -288,7 +288,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          const Divider(color: AppTheme.border, height: 1),
+                          Divider(color: AppTheme.border, height: 1),
                           const SizedBox(height: 20),
 
                           AnimatedOpacity(
@@ -388,7 +388,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -407,8 +407,8 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
         Row(
           children: [
             _buildTimeInput(hourController),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 ':',
                 style: TextStyle(
@@ -439,7 +439,7 @@ class _PowerManagementScreenState extends State<PowerManagementScreen> {
         keyboardType: TextInputType.number,
         maxLength: 2,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: AppTheme.textPrimary,

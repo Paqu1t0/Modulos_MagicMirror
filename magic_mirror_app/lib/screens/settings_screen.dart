@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_theme.dart';
 import '../services/mirror_api_service.dart';
 import '../widgets/bottom_nav_bar.dart';
@@ -69,7 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         width: 2,
                       ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.person_outline,
                       color: AppTheme.primary,
                       size: 28,
@@ -80,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Definições',
                           style: TextStyle(
                             fontSize: 24,
@@ -126,7 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Ligação ao Espelho',
                             style: TextStyle(
                               fontSize: 14,
@@ -167,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onTap: _checkingConnection ? null : _loadConnectionWidgetData,
                           child: Text(
                             _checkingConnection ? 'A verificar...' : 'Atualizar',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppTheme.primary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -182,8 +183,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 32),
 
+              // Modo Escuro (Sem card)
+              ValueListenableBuilder<ThemeMode>(
+                valueListenable: themeNotifier,
+                builder: (context, themeMode, _) {
+                  final isDark = themeMode == ThemeMode.dark;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24.0, left: 4.0, right: 4.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isDark 
+                                ? Colors.amber.withValues(alpha: 0.15) 
+                                : Colors.indigo.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                            color: isDark ? Colors.amber : Colors.indigo,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Modo Escuro',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isDark ? 'Visual confortável para a noite' : 'Visual padrão brilhante',
+                                style: AppTheme.bodySmall.copyWith(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: isDark,
+                          onChanged: (value) async {
+                            themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('dark_mode', value);
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
               // Título de Secção
-              const Text(
+              Text(
                 'CONFIGURAÇÕES DO SISTEMA',
                 style: TextStyle(
                   fontSize: 12,
@@ -281,7 +341,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textPrimary,
@@ -297,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 
                 // Chevron indicador de navegação
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   color: AppTheme.textMuted,
                   size: 20,

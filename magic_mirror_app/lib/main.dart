@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'app_theme.dart';
 import 'services/mirror_api_service.dart';
 import 'services/ssh_service.dart';
@@ -20,6 +21,12 @@ void main() async {
   
   await MirrorApiService().init();
   await SshService().init();
+
+  // Carregar preferência de Modo Escuro
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool('dark_mode') ?? false;
+  themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+  
   runApp(const MagicMirrorApp());
 }
 
@@ -28,11 +35,16 @@ class MagicMirrorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Magic Mirror',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.themeData,
-      home: const MainShell(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, currentMode, __) {
+        return MaterialApp(
+          title: 'Magic Mirror',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.themeData,
+          home: const MainShell(),
+        );
+      },
     );
   }
 }

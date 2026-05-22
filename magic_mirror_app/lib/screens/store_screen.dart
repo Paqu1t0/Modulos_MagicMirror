@@ -359,7 +359,7 @@ class _StoreScreenState extends State<StoreScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Biblioteca de Módulos',
@@ -386,7 +386,7 @@ class _StoreScreenState extends State<StoreScreen>
                     ),
                     child: TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Pesquisar módulos...',
                         prefixIcon:
                             Icon(Icons.search, color: AppTheme.textMuted),
@@ -561,12 +561,12 @@ class _StoreScreenState extends State<StoreScreen>
 
                   // ── Módulos no Mirror (instalados no Pi) ───────────────────
                   _loadingInstalled
-                      ? const Center(
+                      ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 16),
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 16),
                               Text('A ler módulos do Raspberry Pi...',
                                   style: AppTheme.bodyMedium),
                             ],
@@ -774,7 +774,7 @@ class _CatalogueCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(module.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.textPrimary,
@@ -940,7 +940,7 @@ class _InstalledCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(module.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
@@ -957,7 +957,7 @@ class _InstalledCard extends StatelessWidget {
                 if (module.position != null && module.position!.isNotEmpty)
                   Row(
                     children: [
-                      const Icon(Icons.place_outlined,
+                      Icon(Icons.place_outlined,
                           size: 11, color: AppTheme.textMuted),
                       const SizedBox(width: 3),
                       Text(module.position!, style: AppTheme.bodySmall),
