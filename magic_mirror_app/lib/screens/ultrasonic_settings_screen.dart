@@ -260,9 +260,16 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Distância limite:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+                              Expanded(
+                                child: Text(
+                                  'Distância limite:',
+                                  style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                '${_distanceLimit.toInt()} cm / ${(_distanceLimit / 100).toStringAsFixed(1)} metros',
+                                '${_distanceLimit.toInt()} cm / ${(_distanceLimit / 100).toStringAsFixed(1)} m',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -375,9 +382,18 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Tempo para desligar:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+                              Expanded(
+                                child: Text(
+                                  'Tempo para desligar:',
+                                  style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                '$_activeSeconds s / ${(_activeSeconds >= 60) ? '${(_activeSeconds / 60).floor()}m ${_activeSeconds % 60}s' : '$_activeSeconds segundos'}',
+                                (_activeSeconds >= 60)
+                                    ? '${(_activeSeconds / 60).floor()}m ${_activeSeconds % 60}s'
+                                    : '$_activeSeconds segundos',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_theme.dart';
 import '../services/mirror_api_service.dart';
+import '../services/ssh_service.dart';
 import '../widgets/bottom_nav_bar.dart';
 import 'connection_settings_screen.dart';
 import 'power_management_screen.dart';
@@ -27,19 +28,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadConnectionWidgetData();
   }
 
-  Future<void> _loadConnectionWidgetData() async {
-    setState(() => _checkingConnection = true);
-    
-    // Obter o IP atualmente configurado
+  Future<void> _loadConnectionWidgetData({bool checkConnection = true}) async {
+    // 1. Obter o IP localmente configurado de forma imediata (sem jank)
     final ip = await MirrorApiService().getSavedIp();
+    if (mounted) {
+      setState(() {
+        _savedIp = ip.isEmpty ? 'Não configurado' : ip;
+        if (checkConnection) {
+          _checkingConnection = true;
+        }
+      });
+    }
+
+    if (!checkConnection) return;
+
+    // 2. Aguarda que a animação de transição termine antes de iniciar a ligação de rede pesada
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
     
-    // Testar ligação rápida
+    // 3. Testar ligação rápida
     final apiStatus = await MirrorApiService().getStatus();
     final isOnline = apiStatus.isOnline;
 
     if (mounted) {
       setState(() {
-        _savedIp = ip.isEmpty ? 'Não configurado' : ip;
         _isOnline = isOnline;
         _checkingConnection = false;
       });
@@ -165,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const SizedBox(height: 4),
                         GestureDetector(
-                          onTap: _checkingConnection ? null : _loadConnectionWidgetData,
+                          onTap: _checkingConnection ? null : () => _loadConnectionWidgetData(checkConnection: true),
                           child: Text(
                             _checkingConnection ? 'A verificar...' : 'Atualizar',
                             style: TextStyle(
@@ -284,6 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.settings_ethernet_outlined,
                 iconColor: Colors.indigo,
                 destination: const ConnectionSettingsScreen(),
+                refreshConnectionOnReturn: true,
               ),
             ],
           ),
@@ -303,6 +316,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required IconData icon,
     required Color iconColor,
     required Widget destination,
+    bool refreshConnectionOnReturn = false,
   }) {
     return Container(
       decoration: AppTheme.cardDecoration,
@@ -310,12 +324,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () async {
-            // Navega para o sub-ecrã e recarrega os dados do widget ao voltar
+            String? oldIp;
+            String? oldUser;
+            String? oldPass;
+            
+            if (refreshConnectionOnReturn) {
+              oldIp = await MirrorApiService().getSavedIp();
+              oldUser = await SshService().getSavedUser();
+              oldPass = await SshService().getSavedPass();
+            }
+
+            if (!context.mounted) return;
+
+            // Navega para o sub-ecrã
             await Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => destination),
             );
-            _loadConnectionWidgetData();
+            
+            if (refreshConnectionOnReturn) {
+              final newIp = await MirrorApiService().getSavedIp();
+              final newUser = await SshService().getSavedUser();
+              final newPass = await SshService().getSavedPass();
+              
+              if (newIp != oldIp || newUser != oldUser || newPass != oldPass) {
+                _loadConnectionWidgetData(checkConnection: true);
+              } else {
+                _loadConnectionWidgetData(checkConnection: false);
+              }
+            } else {
+              _loadConnectionWidgetData(checkConnection: false);
+            }
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(

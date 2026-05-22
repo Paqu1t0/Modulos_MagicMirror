@@ -127,12 +127,14 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     }
   }
 
-  Future<void> _loadAll() async {
-    setState(() => _loadingWidgets = true);
+  Future<void> _loadAll({bool forceRefresh = false}) async {
+    if (_installedWidgets.isEmpty || _layouts.values.every((m) => m.isEmpty)) {
+      setState(() => _loadingWidgets = true);
+    }
 
     if (widget.presetToEdit != null) {
       // Modo editar preset — carrega módulos e usa layout do preset
-      final modules = await MirrorApiService().getAllInstalledModules();
+      final modules = await MirrorApiService().getAllInstalledModules(forceRefresh: forceRefresh);
       if (mounted) {
         setState(() {
           _installedWidgets = modules.where((w) => w.isInstalled).toList();
@@ -151,9 +153,9 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
 
     // Modo layout principal — carrega módulos e verifica preset ativo
     final results = await Future.wait([
-      MirrorApiService().getAllInstalledModules(),
+      MirrorApiService().getAllInstalledModules(forceRefresh: forceRefresh),
       MirrorApiService().getPresets(),
-      MirrorApiService().loadLayout(),
+      MirrorApiService().loadLayout(forceRefresh: forceRefresh),
     ]);
 
     final modules = results[0] as List<WidgetModel>;
@@ -806,7 +808,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
                         children: [
                           if (widget.presetToEdit == null)
                             IconButton(
-                              onPressed: _loadAll,
+                              onPressed: () => _loadAll(forceRefresh: true),
                               icon: Icon(Icons.refresh, color: AppTheme.textMuted),
                               tooltip: 'Recarregar do Pi',
                             ),
@@ -928,18 +930,33 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
     );
 
     if (list.isNotEmpty) {
-      return Draggable<String>(
+      return LongPressDraggable<String>(
+        delay: const Duration(milliseconds: 600),
         data: position,
         feedback: Material(
           color: Colors.transparent,
-          child: SizedBox(
-            width: 120,
-            height: 70 * heightFactor,
-            child: Opacity(
-              opacity: 0.8,
-              child: _LayoutCell(
-                position: position,
-                widgets: list,
+          child: Transform.scale(
+            scale: 1.12,
+            child: Container(
+              width: 120,
+              height: 70 * heightFactor,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Opacity(
+                opacity: 0.95,
+                child: _LayoutCell(
+                  position: position,
+                  widgets: list,
+                ),
               ),
             ),
           ),
@@ -947,7 +964,7 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
         childWhenDragging: SizedBox(
           height: 70 * heightFactor,
           child: Opacity(
-            opacity: 0.3,
+            opacity: 0.15,
             child: _LayoutCell(
               position: position,
               widgets: list,
@@ -977,6 +994,34 @@ class _LayoutScreenState extends State<LayoutScreen> with SingleTickerProviderSt
             ],
           ),
           const SizedBox(height: 14),
+
+          // Banner informativo de arrastar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: AppTheme.primary, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Pressiona e segura um módulo para o mover para outra posição.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Custom MagicMirror Grid layout
           Container(

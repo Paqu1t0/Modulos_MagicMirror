@@ -27,14 +27,47 @@ class SshService {
     _pass = prefs.getString(_prefKeyPass) ?? '';
   }
 
+  List<String>? _cachedInstalledModuleNames;
+  DateTime? _cacheInstalledModuleNamesTime;
+  List<dynamic>? _cachedRealModules;
+  DateTime? _cacheRealModulesTime;
+  Map<int, Map<String, String>>? _cachedLayout;
+  DateTime? _cacheLayoutTime;
+
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    final age = DateTime.now().difference(cacheTime);
+    return age.inSeconds < 30;
+  }
+
+  void clearCache() {
+    _cachedInstalledModuleNames = null;
+    _cacheInstalledModuleNamesTime = null;
+    _cachedRealModules = null;
+    _cacheRealModulesTime = null;
+    _cachedLayout = null;
+    _cacheLayoutTime = null;
+    debugPrint('SshService memory cache cleared');
+  }
+
   Future<void> saveConfig(String ip, String user, String pass) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefKeyIp, ip);
     await prefs.setString(_prefKeyUser, user);
     await prefs.setString(_prefKeyPass, pass);
+    
+    // Se mudou a configuração, fechamos a ligação anterior em cache
+    if (_ip != ip || _user != user || _pass != pass) {
+      _client?.close();
+      _client = null;
+      _connectFuture = null;
+    }
+    
     _ip = ip;
     _user = user;
     _pass = pass;
+
+    clearCache();
   }
 
   Future<String> getSavedUser() async {
@@ -49,26 +82,66 @@ class SshService {
 
   Future<bool> testConnection() async {
     try {
-      final client = await _connect();
-      client.close();
+      // Forçar nova ligação para validar credenciais
+      _client?.close();
+      _client = null;
+      _connectFuture = null;
+      await _connect();
       return true;
     } catch (e) {
       debugPrint('SSH Test Error: $e');
+      _client = null;
+      _connectFuture = null;
       return false;
     }
   }
 
-  Future<SSHClient> _connect() async {
+  SSHClient? _client;
+  Future<SSHClient>? _connectFuture;
+
+  Future<SSHClient> _connect() {
     if (isTesting) {
       throw Exception('SSH socket connections disabled in automated testing environment.');
     }
-    final socket = await SSHSocket.connect(_ip, 22,
-        timeout: const Duration(seconds: 8));
-    return SSHClient(
-      socket,
-      username: _user,
-      onPasswordRequest: () => _pass,
-    );
+    if (_client != null) {
+      return Future.value(_client!);
+    }
+    if (_connectFuture != null) {
+      return _connectFuture!;
+    }
+
+    _connectFuture = () async {
+      try {
+        final socket = await SSHSocket.connect(_ip, 22,
+            timeout: const Duration(seconds: 5));
+        final client = SSHClient(
+          socket,
+          username: _user,
+          onPasswordRequest: () => _pass,
+        );
+        _client = client;
+        
+        // Limpa o cliente quando a ligação for fechada em segundo plano
+        client.done.then((_) {
+          if (_client == client) {
+            _client = null;
+            _connectFuture = null;
+          }
+        }).catchError((_) {
+          if (_client == client) {
+            _client = null;
+            _connectFuture = null;
+          }
+        });
+        return client;
+      } catch (e) {
+        _client = null;
+        _connectFuture = null;
+        rethrow;
+      }
+    }();
+
+    return _connectFuture!;
   }
 
   /// Executa um comando simples e devolve stdout.
@@ -76,22 +149,31 @@ class SshService {
     try {
       final client = await _connect();
       final result = await client.run(command);
-      client.close();
       return utf8.decode(result);
     } catch (e) {
-      debugPrint('SSH Execute Error: $e');
-      return null;
+      debugPrint('SSH Execute Error: $e. A tentar reconetar...');
+      _client?.close();
+      _client = null;
+      _connectFuture = null;
+      try {
+        final client = await _connect();
+        final result = await client.run(command);
+        return utf8.decode(result);
+      } catch (e2) {
+        debugPrint('SSH Retry Execute Error: $e2');
+        _client?.close();
+        _client = null;
+        _connectFuture = null;
+        return null;
+      }
     }
   }
 
   /// Inicia uma shell interactiva
   Future<SSHSession?> startInteractiveShell() async {
     try {
-      // Connect to the Pi
       final client = await _connect();
-      // Wait for a shell
       final session = await client.shell();
-      // It's the caller's responsibility to close the session/client.
       return session;
     } catch (e) {
       debugPrint('SSH Interactive Shell Error: $e');
@@ -102,9 +184,7 @@ class SshService {
   /// Corre um script Node.js enviando-o via stdin (node -)
   /// Evita todos os problemas de escaping de shell.
   Future<String?> _runNodeScript(String jsCode) async {
-    try {
-      final client = await _connect();
-      // Encontra o node dinamicamente no Pi e lê o script do stdin
+    Future<String?> run(SSHClient client) async {
       final session = await client.execute(
         'if command -v node >/dev/null 2>&1; then node -; '
         'elif [ -s "\$HOME/.nvm/nvm.sh" ]; then . "\$HOME/.nvm/nvm.sh" && node -; '
@@ -119,13 +199,32 @@ class SshService {
       await for (final chunk in session.stdout) {
         chunks.addAll(chunk);
       }
-      client.close();
       final output = utf8.decode(chunks);
-      debugPrint('Node script output: $output');
       return output.isNotEmpty ? output : null;
+    }
+
+    try {
+      final client = await _connect();
+      final output = await run(client);
+      debugPrint('Node script output: $output');
+      return output;
     } catch (e) {
-      debugPrint('_runNodeScript error: $e');
-      return null;
+      debugPrint('_runNodeScript error: $e. A tentar reconetar...');
+      _client?.close();
+      _client = null;
+      _connectFuture = null;
+      try {
+        final client = await _connect();
+        final output = await run(client);
+        debugPrint('Node script retry output: $output');
+        return output;
+      } catch (e2) {
+        debugPrint('_runNodeScript retry error: $e2');
+        _client?.close();
+        _client = null;
+        _connectFuture = null;
+        return null;
+      }
     }
   }
 
@@ -274,19 +373,32 @@ class SshService {
 
   /// Lista os nomes das pastas em ~/MagicMirror/modules.
   /// Esta abordagem funciona sempre — não precisa de node.
-  Future<List<String>> listInstalledModuleNames() async {
+  Future<List<String>> listInstalledModuleNames({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedInstalledModuleNames != null && _isCacheValid(_cacheInstalledModuleNamesTime)) {
+      debugPrint('Returning listInstalledModuleNames from memory cache');
+      return _cachedInstalledModuleNames!;
+    }
     final result = await executeCommand(
       r"ls -1 $HOME/MagicMirror/modules 2>/dev/null | grep -vE '^(default|node_modules|\..*)'",
     );
-    if (result == null || result.trim().isEmpty) return [];
-    return result.trim().split('\n').where((s) => s.isNotEmpty).toList();
+    if (result == null || result.trim().isEmpty) {
+      _cachedInstalledModuleNames = [];
+    } else {
+      _cachedInstalledModuleNames = result.trim().split('\n').where((s) => s.isNotEmpty).toList();
+    }
+    _cacheInstalledModuleNamesTime = DateTime.now();
+    return _cachedInstalledModuleNames!;
   }
 
   /// Busca módulos instalados do Pi.
   /// Tenta 3 abordagens por ordem de confiança:
   ///   1. Node.js via stdin (dados completos com posição)
   ///   2. ls da pasta de módulos (só nomes, sem posição)
-  Future<List<dynamic>> fetchRealModules() async {
+  Future<List<dynamic>> fetchRealModules({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedRealModules != null && _isCacheValid(_cacheRealModulesTime)) {
+      debugPrint('Returning fetchRealModules from memory cache');
+      return _cachedRealModules!;
+    }
     // ── Tentativa 1: Node.js via stdin ──────────────────────────────────────
     const jsScript = r"""
 const path = require('path');
@@ -325,41 +437,50 @@ try {
   }
 }
 """;
+    List<dynamic> fetched = [];
     final nodeResult = await _runNodeScript(jsScript);
     if (nodeResult != null && nodeResult.isNotEmpty) {
       try {
         final decoded = json.decode(nodeResult.trim());
         if (decoded['ok'] == true && decoded['data'] != null) {
-          return decoded['data'] as List<dynamic>;
+          fetched = decoded['data'] as List<dynamic>;
         }
       } catch (e) {
         debugPrint('fetchRealModules node parse error: $e');
       }
     }
 
-    // ── Tentativa 2: ls simples (sem node) ──────────────────────────────────
-    debugPrint('fetchRealModules: node falhou, a usar ls');
-    final names = await listInstalledModuleNames();
-    if (names.isNotEmpty) {
-      return names
-          .map((n) => {
-                'id': n,
-                'name': n.replaceAll('MMM-', '').replaceAll('-', ' '),
-                'description': '',
-                'position': '',
-                'installed': true,
-                'classes': '',
-              })
-          .toList();
+    if (fetched.isEmpty) {
+      // ── Tentativa 2: ls simples (sem node) ──────────────────────────────────
+      debugPrint('fetchRealModules: node falhou, a usar ls');
+      final names = await listInstalledModuleNames(forceRefresh: forceRefresh);
+      if (names.isNotEmpty) {
+        fetched = names
+            .map((n) => {
+                  'id': n,
+                  'name': n.replaceAll('MMM-', '').replaceAll('-', ' '),
+                  'description': '',
+                  'position': '',
+                  'installed': true,
+                  'classes': '',
+                })
+            .toList();
+      }
     }
 
-    return [];
+    _cachedRealModules = fetched;
+    _cacheRealModulesTime = DateTime.now();
+    return _cachedRealModules!;
   }
 
   // ─── Layout ────────────────────────────────────────────────────────────────
 
   /// Lê o config.js e devolve o layout actual agrupado por página.
-  Future<Map<int, Map<String, String>>> fetchLayoutFromConfig() async {
+  Future<Map<int, Map<String, String>>> fetchLayoutFromConfig({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedLayout != null && _isCacheValid(_cacheLayoutTime)) {
+      debugPrint('Returning fetchLayoutFromConfig from memory cache');
+      return _cachedLayout!;
+    }
     const jsScript = r"""
 const path = require('path');
 const home = process.env.HOME || '/home/pi';
@@ -434,27 +555,29 @@ try {
   console.log(JSON.stringify({ ok: false, error: e.toString() }));
 }
 """;
+    Map<int, Map<String, String>> fetched = {};
     final result = await _runNodeScript(jsScript);
     if (result != null && result.isNotEmpty) {
       try {
         final decoded = json.decode(result.trim());
         if (decoded['ok'] == true && decoded['data'] != null) {
           final raw = decoded['data'] as Map<String, dynamic>;
-          final layout = <int, Map<String, String>>{};
           raw.forEach((pageStr, positions) {
             final page = int.tryParse(pageStr) ?? 1;
             final posMap = <String, String>{};
             (positions as Map<String, dynamic>)
                 .forEach((pos, mod) => posMap[pos] = mod.toString());
-            layout[page] = posMap;
+            fetched[page] = posMap;
           });
-          return layout;
         }
       } catch (e) {
         debugPrint('fetchLayoutFromConfig parse error: $e');
       }
     }
-    return {};
+    
+    _cachedLayout = fetched;
+    _cacheLayoutTime = DateTime.now();
+    return _cachedLayout!;
   }
 
   /// Atualiza o config.js para atribuir as classes de página aos módulos.
@@ -746,7 +869,10 @@ console.log(JSON.stringify({ ok: true, inserted: modulesToInsert.length }));
     if (result != null) {
       try {
         final decoded = json.decode(result.trim());
-        if (decoded['ok'] == true) return await restartMagicMirror();
+        if (decoded['ok'] == true) {
+          clearCache();
+          return await restartMagicMirror();
+        }
       } catch (_) {}
     }
     return false;
@@ -881,8 +1007,7 @@ try {
 
   /// Faz upload de um ficheiro via SFTP para a pasta do módulo (opcionalmente numa sub-pasta).
   Future<bool> uploadFile(String moduleName, String fileName, Uint8List bytes, {String? subfolder}) async {
-    try {
-      final client = await _connect();
+    Future<bool> run(SSHClient client) async {
       final sftp = await client.sftp();
       // Uses the configured user home directory or fallback to /home/pi
       final home = _user == 'pi' ? '/home/pi' : '/home/$_user';
@@ -902,20 +1027,32 @@ try {
       final file = await sftp.open(remotePath, mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate);
       await file.writeBytes(bytes);
       await file.close();
-      client.close();
       return true;
+    }
+
+    try {
+      final client = await _connect();
+      return await run(client);
     } catch (e) {
-      debugPrint('SSH SFTP Upload Error: $e');
-      return false;
+      debugPrint('SSH SFTP Upload Error: $e. A tentar reconetar...');
+      _client?.close();
+      _client = null;
+      try {
+        final client = await _connect();
+        return await run(client);
+      } catch (e2) {
+        debugPrint('SSH SFTP Upload Retry Error: $e2');
+        _client?.close();
+        _client = null;
+        return false;
+      }
     }
   }
 
   // ─── Instalar / Remover / Atualizar ────────────────────────────────────────
 
   Future<bool> _deployLocalModule(String moduleName) async {
-    try {
-      // 1. Conetar via SSH/SFTP
-      final client = await _connect();
+    Future<bool> run(SSHClient client) async {
       final sftp = await client.sftp();
       final home = _user == 'pi' ? '/home/pi' : '/home/$_user';
       final remoteDir = '$home/MagicMirror/modules/$moduleName';
@@ -931,7 +1068,6 @@ try {
 
       if (moduleFiles.isEmpty) {
         debugPrint('Nenhum ficheiro encontrado nos assets para o módulo $moduleName');
-        client.close();
         return false;
       }
 
@@ -960,8 +1096,6 @@ try {
         await file.close();
       }
 
-      client.close();
-
       // 4. Executar npm install se houver um package.json
       final checkNpm = await executeCommand('[ -f "$remoteDir/package.json" ] && echo yes || echo no');
       if (checkNpm != null && checkNpm.trim() == 'yes') {
@@ -969,10 +1103,26 @@ try {
         await executeCommand('cd "$remoteDir" && npm install --production 2>&1');
       }
 
+      clearCache();
       return true;
+    }
+
+    try {
+      final client = await _connect();
+      return await run(client);
     } catch (e) {
-      debugPrint('Erro ao fazer deploy do módulo local $moduleName: $e');
-      return false;
+      debugPrint('Erro ao fazer deploy do módulo local $moduleName: $e. A tentar reconetar...');
+      _client?.close();
+      _client = null;
+      try {
+        final client = await _connect();
+        return await run(client);
+      } catch (e2) {
+        debugPrint('Erro ao fazer deploy do módulo local $moduleName no retry: $e2');
+        _client?.close();
+        _client = null;
+        return false;
+      }
     }
   }
 
@@ -995,6 +1145,7 @@ try {
 
     await executeCommand(
         '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true');
+    clearCache();
     return true;
   }
 
@@ -1083,6 +1234,7 @@ console.log(JSON.stringify({ ok: true, removed: blocksToRemove.length }));
     
     // 3. Reiniciar para aplicar
     if (result != null && result.contains('RM_OK')) {
+      clearCache();
       await restartMagicMirror();
       return true;
     }
@@ -1096,6 +1248,7 @@ console.log(JSON.stringify({ ok: true, removed: blocksToRemove.length }));
     if (result == null || !result.contains('GIT_DONE')) return false;
     await executeCommand(
         '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true');
+    clearCache();
     return true;
   }
 

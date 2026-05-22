@@ -218,7 +218,7 @@ class MirrorApiService {
   /// Módulos **configurados** no Pi (presentes no config.js ou via HTTP).
   /// Usado para a tab "No Mirror" — reflete o que está realmente a correr no espelho.
   /// NÃO inclui módulos que estão apenas na pasta mas não no config.js.
-  Future<List<WidgetModel>> getModules() async {
+  Future<List<WidgetModel>> getModules({bool forceRefresh = false}) async {
     List<WidgetModel> rawModules = [];
 
     // 1. Tentar HTTP (MMM-Remote-Control)
@@ -234,7 +234,7 @@ class MirrorApiService {
 
     // 2. Fallback SSH: lê o config.js (apenas módulos configurados)
     if (rawModules.isEmpty) {
-      final sshRaw = await SshService().fetchRealModules();
+      final sshRaw = await SshService().fetchRealModules(forceRefresh: forceRefresh);
       if (sshRaw.isNotEmpty) {
         rawModules = sshRaw.map((m) => WidgetModel.fromJson(m)).toList();
       }
@@ -254,13 +254,13 @@ class MirrorApiService {
 
   /// Todos os módulos instalados no Pi (configurados + pasta apenas).
   /// Usado para a tab "No Mirror" da Loja e para o LayoutScreen.
-  Future<List<WidgetModel>> getAllInstalledModules() async {
+  Future<List<WidgetModel>> getAllInstalledModules({bool forceRefresh = false}) async {
     // Começa com os módulos configurados
-    final configured = await getModules();
+    final configured = await getModules(forceRefresh: forceRefresh);
     final configuredIds = configured.map((w) => w.id).toSet();
 
     // Adiciona módulos que estão na pasta mas não no config.js
-    final folderNames = await SshService().listInstalledModuleNames();
+    final folderNames = await SshService().listInstalledModuleNames(forceRefresh: forceRefresh);
     final extra = <WidgetModel>[];
 
     // Carrega o catálogo em fallback para obter info ricas (descrição, categoria, etc.)
@@ -439,8 +439,8 @@ class MirrorApiService {
   }
 
   /// Carrega o layout actual do Pi.
-  Future<Map<int, Map<String, String>>> loadLayout() async {
-    final rawLayout = await SshService().fetchLayoutFromConfig();
+  Future<Map<int, Map<String, String>>> loadLayout({bool forceRefresh = false}) async {
+    final rawLayout = await SshService().fetchLayoutFromConfig(forceRefresh: forceRefresh);
     return deduplicateLayout(rawLayout);
   }
 

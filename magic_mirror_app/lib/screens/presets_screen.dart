@@ -47,7 +47,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
 
   Future<void> _loadPresets() async {
-    setState(() => _loading = true);
+    if (_presets.isEmpty) {
+      setState(() => _loading = true);
+    }
     await _resetDefaultPresetsIfStale();
     final presets = await MirrorApiService().getPresets();
     if (mounted) setState(() { _presets = presets; _loading = false; });

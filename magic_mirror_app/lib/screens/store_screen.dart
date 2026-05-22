@@ -180,12 +180,14 @@ class _StoreScreenState extends State<StoreScreen>
   void _handleTabChange() {
     // Se navegamos para a aba da Loja (índice 1)
     if (widget.activeTabNotifier?.value == 1 && mounted) {
-      _refreshAll();
+      _refreshAll(forceRefresh: false);
     }
   }
 
-  Future<void> _loadCatalogue() async {
-    setState(() => _loadingCatalogue = true);
+  Future<void> _loadCatalogue({bool forceRefresh = false}) async {
+    if (_catalogue.isEmpty) {
+      setState(() => _loadingCatalogue = true);
+    }
     final widgets = await MirrorApiService().getCatalogueModules();
     if (mounted) {
       setState(() {
@@ -197,9 +199,11 @@ class _StoreScreenState extends State<StoreScreen>
     }
   }
 
-  Future<void> _loadInstalled() async {
-    setState(() => _loadingInstalled = true);
-    final widgets = await MirrorApiService().getAllInstalledModules();
+  Future<void> _loadInstalled({bool forceRefresh = false}) async {
+    if (_installed.isEmpty) {
+      setState(() => _loadingInstalled = true);
+    }
+    final widgets = await MirrorApiService().getAllInstalledModules(forceRefresh: forceRefresh);
     if (mounted) {
       setState(() {
         _installed = widgets.where((w) => w.isInstalled).toList();
@@ -210,8 +214,8 @@ class _StoreScreenState extends State<StoreScreen>
     }
   }
 
-  Future<void> _refreshAll() =>
-      Future.wait([_loadCatalogue(), _loadInstalled()]);
+  Future<void> _refreshAll({bool forceRefresh = false}) =>
+      Future.wait([_loadCatalogue(forceRefresh: forceRefresh), _loadInstalled(forceRefresh: forceRefresh)]);
 
   void _crossReferenceInstalledStatus() {
     if (_catalogue.isEmpty) return;
@@ -370,7 +374,7 @@ class _StoreScreenState extends State<StoreScreen>
                         ],
                       ),
                       IconButton(
-                        onPressed: _refreshAll,
+                        onPressed: () => _refreshAll(forceRefresh: true),
                         icon: const Icon(Icons.refresh, color: AppTheme.primary),
                         tooltip: 'Atualizar',
                       ),
