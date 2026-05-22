@@ -72,12 +72,12 @@ Module.register("MMM-GasPrices", {
         wrapper.className = "mmm-gasprices-wrapper";
 
         if (!this.loaded) {
-            wrapper.innerHTML = '<span class="mmm-gasprices-loading"><i class="fa fa-spinner fa-pulse"></i> ⛽ A carregar preços DGEG...</span>';
+            wrapper.innerHTML = '<span class="mmm-gasprices-loading"><i class="fa fa-spinner fa-pulse"></i> A carregar preços DGEG...</span>';
             return wrapper;
         }
 
         if (this.error) {
-            wrapper.innerHTML = `<span class="mmm-gasprices-error">⚠️ ${this.error}</span>`;
+            wrapper.innerHTML = `<span class="mmm-gasprices-error"><i class="fa fa-exclamation-triangle"></i> ${this.error}</span>`;
             return wrapper;
         }
 
@@ -141,7 +141,7 @@ Module.register("MMM-GasPrices", {
             // 1. Posição / Medalha
             const tdPos = document.createElement("td");
             tdPos.className = "mmm-gasprices-pos-cell";
-            tdPos.innerHTML = index === 0 ? "🥇" : `<span>${index + 1}</span>`;
+            tdPos.innerHTML = index === 0 ? '<i class="fa fa-star" style="color:#FFD700;font-size:1.1em;"></i>' : `<span>${index + 1}</span>`;
             tr.appendChild(tdPos);
 
             // 2. Detalhes do Posto (Nome + Concelho)

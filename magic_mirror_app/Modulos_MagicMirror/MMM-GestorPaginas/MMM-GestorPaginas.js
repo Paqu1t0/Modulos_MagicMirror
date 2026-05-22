@@ -18,6 +18,13 @@ Module.register("MMM-GestorPaginas", {
         if (notification === "MODULE_DOM_CREATED" || notification === "ALL_MODULES_STARTED") {
             this.atualizarVisibilidadeModulos();
         }
+        // Permite mudar de página via MMM-Remote-Control (app) sem precisar do node_helper
+        if (notification === "BOTAO_PRESSIONADO") {
+            const acao = this._parseAcao(payload);
+            if (acao) {
+                this.mudarPagina(acao);
+            }
+        }
     },
 
     // Desenha as bolinhas indicadoras no ecrã
@@ -44,17 +51,58 @@ Module.register("MMM-GestorPaginas", {
     // Recebe o clique do Python
     socketNotificationReceived: function(notification, payload) {
         if (notification === "BOTAO_PRESSIONADO") {
-            if (payload.acao === "proxima") {
-                this.paginaAtual++;
-                if (this.paginaAtual > this.config.totalPaginas) this.paginaAtual = 1;
-            } else if (payload.acao === "anterior") {
-                this.paginaAtual--;
-                if (this.paginaAtual < 1) this.paginaAtual = this.config.totalPaginas;
+            const acao = this._parseAcao(payload);
+            if (acao) {
+                this.mudarPagina(acao);
             }
-            
-            this.updateDom(); // Atualiza as bolinhas no ecrã
-            this.atualizarVisibilidadeModulos(); // Esconde as coisas da página velha e mostra da nova
         }
+    },
+
+    _parseAcao: function(payload) {
+        if (!payload) return null;
+        if (typeof payload === "string") {
+            try {
+                const parsed = JSON.parse(payload);
+                payload = parsed;
+            } catch (e) {
+                return payload; // simples string tipo "proxima" ou "anterior"
+            }
+        }
+
+        // Se o payload vier encapsulado num objecto com chave "payload" (comportamento de algumas APIs)
+        if (typeof payload === "object" && payload.payload !== undefined) {
+            payload = payload.payload;
+        }
+
+        let acao = null;
+        if (typeof payload === "object") {
+            // Se acao for "ir", preferimos "pagina" ou "page" se existirem
+            if (payload.acao === "ir" && (payload.pagina !== undefined || payload.page !== undefined)) {
+                acao = payload.pagina !== undefined ? payload.pagina : payload.page;
+            } else {
+                acao = payload.acao || payload.page || payload.pagina;
+            }
+        } else {
+            acao = payload;
+        }
+        return acao;
+    },
+
+    mudarPagina: function(acao) {
+        if (acao === "proxima") {
+            this.paginaAtual++;
+            if (this.paginaAtual > this.config.totalPaginas) this.paginaAtual = 1;
+        } else if (acao === "anterior") {
+            this.paginaAtual--;
+            if (this.paginaAtual < 1) this.paginaAtual = this.config.totalPaginas;
+        } else if (acao === "ir" || typeof acao === "number" || !isNaN(parseInt(acao))) {
+            let num = parseInt(acao);
+            if (!isNaN(num) && num >= 1 && num <= this.config.totalPaginas) {
+                this.paginaAtual = num;
+            }
+        }
+        this.updateDom(); // Atualiza as bolinhas no ecrã
+        this.atualizarVisibilidadeModulos(); // Esconde/mostra os módulos
     },
 
     // A magia de esconder e mostrar módulos

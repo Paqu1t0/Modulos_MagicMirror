@@ -316,10 +316,11 @@ class MirrorApiService {
             .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
             .toList();
         modules.sort((a, b) => b.stars.compareTo(a.stars));
-        // Injeta os nossos no início, evitando duplicados
-        final publicIds = modules.map((m) => m.id.toLowerCase()).toSet();
-        final oursToInject = ours.where((o) => !publicIds.contains(o.id.toLowerCase())).toList();
-        return [...oursToInject, ...modules];
+        // Remove do catálogo público qualquer módulo com o mesmo ID que os nossos
+        // (garante que o nosso GoogleCalendar, etc., sempre aparece em vez do de terceiros)
+        final ourIds = ours.map((o) => o.id.toLowerCase()).toSet();
+        final filteredModules = modules.where((m) => !ourIds.contains(m.id.toLowerCase())).toList();
+        return [...ours, ...filteredModules];
       }
     } catch (_) {}
 
@@ -333,9 +334,9 @@ class MirrorApiService {
             .map((e) => WidgetModel.fromCatalogueJson(e as Map<String, dynamic>))
             .toList();
         modules.sort((a, b) => b.stars.compareTo(a.stars));
-        final publicIds = modules.map((m) => m.id.toLowerCase()).toSet();
-        final oursToInject = ours.where((o) => !publicIds.contains(o.id.toLowerCase())).toList();
-        return [...oursToInject, ...modules];
+        final ourIds = ours.map((o) => o.id.toLowerCase()).toSet();
+        final filteredModules = modules.where((m) => !ourIds.contains(m.id.toLowerCase())).toList();
+        return [...ours, ...filteredModules];
       }
     } catch (_) {}
 
@@ -644,5 +645,75 @@ class MirrorApiService {
     } catch (_) {}
     // Fallback SSH
     return SshService().restartMagicMirror();
+  }
+
+  Future<bool> changePage(String acao) async {
+    debugPrint('changePage: Iniciar alteração de página com ação: $acao');
+    
+    // 1. MMM-Remote-Control API (porta 8080) — funciona sem necessidade de atualizar o Pi
+    try {
+      final url = '$_baseUrl/api/notification/BOTAO_PRESSIONADO';
+      debugPrint('changePage: A tentar MMM-Remote-Control via HTTP: $url');
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'acao': acao
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+      debugPrint('changePage: Resposta MMM-Remote-Control: status=${response.statusCode}');
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        debugPrint('changePage: Sucesso via MMM-Remote-Control');
+        return true;
+      }
+    } catch (e) {
+      debugPrint('changePage: Erro no MMM-Remote-Control: $e');
+    }
+
+    final localPayload = jsonEncode({'acao': acao});
+
+    // 2. Servidor HTTP do node_helper (porta 8765) — requer node_helper atualizado no Pi
+    try {
+      final ip = await getSavedIp();
+      final url = 'http://$ip:8765/pagina';
+      debugPrint('changePage: A tentar HTTP no node_helper: $url');
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: localPayload,
+          )
+          .timeout(const Duration(seconds: 5));
+      debugPrint('changePage: Resposta node_helper HTTP: status=${response.statusCode}, body=${response.body}');
+      if (response.statusCode == 200) {
+        debugPrint('changePage: Sucesso via node_helper HTTP');
+        return true;
+      }
+    } catch (e) {
+      debugPrint('changePage: Erro no node_helper HTTP: $e');
+    }
+
+    // 3. SSH: envia o curl directamente no Pi (funciona sempre que haja SSH)
+    try {
+      debugPrint('changePage: A tentar via SSH curl...');
+      final cmd =
+          "curl -s -X POST http://127.0.0.1:8765/pagina "
+          "-H 'Content-Type: application/json' "
+          "-d '$localPayload'";
+      debugPrint('changePage: SSH comando: $cmd');
+      final result = await SshService().executeCommand(cmd);
+      debugPrint('changePage: Resposta SSH: $result');
+      if (result != null && result.contains('"ok":true')) {
+        debugPrint('changePage: Sucesso via SSH');
+        return true;
+      }
+    } catch (e) {
+      debugPrint('changePage: Erro no SSH curl: $e');
+    }
+
+    debugPrint('changePage: Todos os métodos para mudar de página falharam.');
+    return false;
   }
 }

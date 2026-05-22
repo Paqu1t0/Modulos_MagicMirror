@@ -60,7 +60,7 @@ Module.register("MMM-GoogleCalendar", {
         if (this.error) {
             const err = document.createElement("div");
             err.className = "mmm-gcal-error";
-            err.innerText = "⚠️ " + this.error;
+            err.innerHTML = '<i class="fa fa-exclamation-triangle"></i> ' + this.error;
             wrapper.appendChild(err);
             return wrapper;
         }
@@ -68,7 +68,7 @@ Module.register("MMM-GoogleCalendar", {
         if (!this.loaded) {
             const loading = document.createElement("div");
             loading.className = "mmm-gcal-loading";
-            loading.innerText = "📅 A sincronizar calendário...";
+            loading.innerHTML = '<i class="fa fa-calendar fa-spin"></i> A sincronizar calendário...';
             wrapper.appendChild(loading);
             return wrapper;
         }
@@ -76,7 +76,7 @@ Module.register("MMM-GoogleCalendar", {
         // Título
         const header = document.createElement("div");
         header.className = "mmm-gcal-header";
-        header.innerHTML = `<span class="mmm-gcal-icon">📅</span> <span>Próximos Eventos</span>`;
+        header.innerHTML = `<span class="mmm-gcal-icon"><i class="fa fa-calendar"></i></span> <span>Próximos Eventos</span>`;
         wrapper.appendChild(header);
 
         if (this.events.length === 0) {
@@ -112,14 +112,14 @@ Module.register("MMM-GoogleCalendar", {
             if (event.timeStr) {
                 const time = document.createElement("div");
                 time.className = "mmm-gcal-time";
-                time.innerText = "🕐 " + event.timeStr;
+                time.innerHTML = '<i class="fa fa-clock-o"></i> ' + event.timeStr;
                 info.appendChild(time);
             }
 
             if (this.config.showLocation && event.location) {
                 const loc = document.createElement("div");
                 loc.className = "mmm-gcal-location";
-                loc.innerText = "📍 " + event.location;
+                loc.innerHTML = '<i class="fa fa-map-marker"></i> ' + event.location;
                 info.appendChild(loc);
             }
 

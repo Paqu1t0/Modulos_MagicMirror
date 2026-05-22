@@ -19,6 +19,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   MirrorStatus _status = MirrorStatus.offline;
   bool _loading = false;
   bool _applying = false;
+  bool _pageChanging = false;
+  int _currentPage = 1;
+  static const int _totalPages = 3;
   Timer? _pollingTimer;
 
   @override
@@ -67,6 +70,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
+    }
+  }
+
+  Future<void> _changePage(String acao) async {
+    if (_pageChanging) return;
+    setState(() => _pageChanging = true);
+    final ok = await MirrorApiService().changePage(acao);
+    if (mounted) {
+      setState(() {
+        _pageChanging = false;
+        if (ok) {
+          if (acao == 'proxima') {
+            _currentPage = _currentPage < _totalPages ? _currentPage + 1 : 1;
+          } else if (acao == 'anterior') {
+            _currentPage = _currentPage > 1 ? _currentPage - 1 : _totalPages;
+          }
+        }
+      });
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível mudar a página. Verifica a ligação.'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -143,7 +173,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 24),
+
+                      // Page Control Card
+                      _PageControlCard(
+                        currentPage: _currentPage,
+                        totalPages: _totalPages,
+                        isChanging: _pageChanging,
+                        onPrevious: () => _changePage('anterior'),
+                        onNext: () => _changePage('proxima'),
+                        onPageTap: (p) async {
+                          if (_pageChanging || p == _currentPage) return;
+                          setState(() => _pageChanging = true);
+                          final ok = await MirrorApiService().changePage(p.toString());
+                          if (mounted) {
+                            setState(() {
+                              _pageChanging = false;
+                              if (ok) {
+                                _currentPage = p;
+                              }
+                            });
+                            if (!ok) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Não foi possível mudar a página. Verifica a ligação.'),
+                                  backgroundColor: AppTheme.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 24),
 
                       // Apply & Reset Button
                       SizedBox(
@@ -404,3 +466,122 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+// ─── Page Control Card ──────────────────────────────────────────────────────────
+
+class _PageControlCard extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final bool isChanging;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final void Function(int) onPageTap;
+
+  const _PageControlCard({
+    required this.currentPage,
+    required this.totalPages,
+    required this.isChanging,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onPageTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: AppTheme.cardDecoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.view_carousel_outlined, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Gestor de Páginas', style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    )),
+                    Text('Página $currentPage de $totalPages', style: AppTheme.bodySmall),
+                  ],
+                ),
+              ),
+              if (isChanging)
+                const SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Bolinhas indicadoras (clicáveis para ir diretamente)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(totalPages, (i) {
+              final page = i + 1;
+              final isActive = page == currentPage;
+              return GestureDetector(
+                onTap: () => onPageTap(page),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  width: isActive ? 28 : 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: isActive ? AppTheme.primary : AppTheme.border,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 20),
+          // Botões anterior / próxima
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isChanging ? null : onPrevious,
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  label: const Text('Anterior'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: BorderSide(color: AppTheme.border),
+                    foregroundColor: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: isChanging ? null : onNext,
+                  icon: const Text('Próxima'),
+                  label: const Icon(Icons.chevron_right, size: 20),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

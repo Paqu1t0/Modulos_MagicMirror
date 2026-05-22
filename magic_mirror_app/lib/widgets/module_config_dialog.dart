@@ -387,6 +387,159 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
     if (mounted) setState(() => _loading = false);
   }
 
+  Future<void> _startGoogleCalendarAuth() async {
+    final clientId = _currentConfig['clientId']?.toString().trim() ?? '';
+    final clientSecret = _currentConfig['clientSecret']?.toString().trim() ?? '';
+
+    if (clientId.isEmpty || clientSecret.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Preenche o Client ID e Client Secret primeiro!'),
+        backgroundColor: AppTheme.warning,
+      ));
+      return;
+    }
+
+    const redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
+    const scope = 'https://www.googleapis.com/auth/calendar.readonly';
+    final authUrl =
+        'https://accounts.google.com/o/oauth2/auth'
+        '?client_id=$clientId'
+        '&redirect_uri=${Uri.encodeComponent(redirectUri)}'
+        '&scope=${Uri.encodeComponent(scope)}'
+        '&response_type=code'
+        '&access_type=offline'
+        '&prompt=consent';
+
+    final codeController = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Row(
+          children: const [
+            Icon(Icons.calendar_today, color: Color(0xFF4285F4)),
+            SizedBox(width: 8),
+            Expanded(child: Text('Autorização do Google Calendar', style: TextStyle(color: Colors.white, fontSize: 16))),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '1. Clica no botão abaixo para abrires a página de autorização da Google.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.open_in_browser),
+                  label: const Text('Abrir Autorização Google'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4285F4),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => _launchUrl(authUrl),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '2. Faz login com a tua conta Google e autoriza o acesso ao Calendário.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '3. Após autorizares, aparece um código na página. Copia-o e cola aqui:',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: codeController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: '4/0AX4XfWh...',
+                  hintStyle: TextStyle(color: Colors.white38),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4285F4))),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, codeController.text.trim()),
+            child: const Text('Obter Refresh Token', style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || result.isEmpty) return;
+    setState(() => _loading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'code': result,
+          'client_id': clientId,
+          'client_secret': clientSecret,
+          'redirect_uri': redirectUri,
+          'grant_type': 'authorization_code',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['refresh_token'] != null) {
+          setState(() {
+            _currentConfig['refreshToken'] = data['refresh_token'];
+            if (_textControllers.containsKey('refreshToken')) {
+              _textControllers['refreshToken']!.text = data['refresh_token'];
+            }
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Refresh Token gerado com sucesso! Não te esqueças de Gravar.'),
+              backgroundColor: Colors.green,
+            ));
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Resposta sem refresh_token: ${response.body}'),
+              backgroundColor: Colors.red,
+            ));
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Erro Google (${response.statusCode}): ${response.body}'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erro de rede: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+
+    if (mounted) setState(() => _loading = false);
+  }
+
   Future<void> _uploadFile() async {
     String? subfolder;
     
@@ -514,7 +667,9 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
             );
           } else {
             // Strings or anything else
-            final isRefreshToken = widget.module.id == 'MMM-SpotifyNowPlaying' && key == 'refreshToken';
+            final isSpotifyRefreshToken = widget.module.id == 'MMM-SpotifyNowPlaying' && key == 'refreshToken';
+            final isGoogleCalendarRefreshToken = widget.module.id == 'MMM-GoogleCalendar' && key == 'refreshToken';
+            final isRefreshToken = isSpotifyRefreshToken || isGoogleCalendarRefreshToken;
             final hasToken = _currentConfig['refreshToken'] != null && _currentConfig['refreshToken'].toString().trim().isNotEmpty;
             final isBusStopId = widget.module.id == 'MMM-BusCPT' && key == 'stopId';
 
@@ -566,14 +721,23 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
                       padding: const EdgeInsets.only(top: 8.0),
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.vpn_key),
-                        label: const Text('Gerar Refresh Token Automaticamente', style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: Text(
+                          isSpotifyRefreshToken
+                              ? 'Gerar Refresh Token Automaticamente'
+                              : 'Gerar Refresh Token (Google)',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1DB954), // Spotify Green
+                          backgroundColor: isSpotifyRefreshToken
+                              ? const Color(0xFF1DB954)
+                              : const Color(0xFF4285F4),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        onPressed: _startSpotifyNativeAuth,
+                        onPressed: isSpotifyRefreshToken
+                            ? _startSpotifyNativeAuth
+                            : _startGoogleCalendarAuth,
                       ),
                     ),
                 ],
