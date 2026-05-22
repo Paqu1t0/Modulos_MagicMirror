@@ -580,7 +580,7 @@ class _ModuleConfigDialogState extends State<ModuleConfigDialog> {
               ),
             );
           }
-        }).toList(),
+        }),
       ],
     );
   }

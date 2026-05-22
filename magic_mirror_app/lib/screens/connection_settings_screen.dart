@@ -97,7 +97,7 @@ class _ConnectionSettingsScreenState extends State<ConnectionSettingsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.cardBg,
         elevation: 0.5,
         title: Text(
           'Conexão do Espelho',

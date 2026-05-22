@@ -516,6 +516,25 @@ class _StoreScreenState extends State<StoreScreen>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  // Legenda
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 12, height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Módulos com este estilo foram criados por nós',
+                          style: AppTheme.bodySmall),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                 ],
               ),
             ),
@@ -761,24 +780,22 @@ class _CatalogueCard extends StatelessWidget {
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerRight,
-                            child: module.isOurs
-                                ? const _OursBadge(compact: true)
-                                : (module.isInstalled
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 7, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.success.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: const Text('Instalado',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppTheme.success,
-                                            )),
-                                      )
-                                    : const SizedBox()),
+                            child: module.isInstalled
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.success.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text('Instalado',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.success,
+                                        )),
+                                  )
+                                : const SizedBox(),
                           ),
                         ),
                       ],
@@ -975,17 +992,14 @@ class _InstalledCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(module.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
                           )),
                     ),
-                    if (module.isOurs) ...
-                    [
-                      const SizedBox(width: 6),
-                      const _OursBadge(compact: true),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 2),

@@ -257,33 +257,24 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
     if (result == true && nameController.text.trim().isNotEmpty && mounted) {
       setState(() => _loading = true);
-      final currentLayout = await MirrorApiService().loadLayout();
-      
-      int widgetCount = 0;
-      if (currentLayout.isNotEmpty) {
-        final unique = <String>{};
-        for (final page in currentLayout.values) {
-          for (final val in page.values) {
-            if (val.isNotEmpty) {
-              unique.addAll(val.split(','));
-            }
-          }
-        }
-        widgetCount = unique.length;
-      }
 
       final newPreset = PresetModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: nameController.text.trim(),
         description: descController.text.trim(),
-        widgetCount: widgetCount,
+        widgetCount: 0,
         iconName: selectedIcon,
-        layout: currentLayout.isNotEmpty ? currentLayout : {1: {}, 2: {}, 3: {}},
+        layout: {1: {}, 2: {}, 3: {}},
         isActive: false,
       );
 
       await MirrorApiService().savePreset(newPreset);
       await _loadPresets();
+
+      // Abrir editor de layout imediatamente após criar
+      if (mounted) {
+        await _editPresetLayout(newPreset);
+      }
     }
   }
 

@@ -67,15 +67,20 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return IndexedStack(
-      index: _currentIndex,
-      children: [
-        DashboardScreen(onNavigate: _navigate),
-        StoreScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
-        LayoutScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
-        PresetsScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
-        SettingsScreen(onNavigate: _navigate),
-      ],
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, themeMode, _) {
+        return IndexedStack(
+          index: _currentIndex,
+          children: [
+            DashboardScreen(onNavigate: _navigate),
+            StoreScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
+            LayoutScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
+            PresetsScreen(onNavigate: _navigate, activeTabNotifier: _activeTabNotifier),
+            SettingsScreen(onNavigate: _navigate),
+          ],
+        );
+      },
     );
   }
 }

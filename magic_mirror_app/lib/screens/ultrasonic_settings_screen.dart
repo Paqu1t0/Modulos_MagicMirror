@@ -120,7 +120,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.cardBg,
         elevation: 0.5,
         title: Text(
           'Sensor Ultrassónico',
@@ -436,7 +436,7 @@ class _UltrasonicSettingsScreenState extends State<UltrasonicSettingsScreen> wit
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 10),
                                       decoration: BoxDecoration(
-                                        color: isSelected ? Colors.deepPurple : Colors.white,
+                                        color: isSelected ? Colors.deepPurple : AppTheme.cardBg,
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                           color: isSelected ? Colors.deepPurple : AppTheme.border,

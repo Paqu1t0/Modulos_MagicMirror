@@ -106,3 +106,31 @@
     width: 100%;
     height: 100%;
 }
+
+/* -- Estado Idle (Nada a tocar) ------------------------------------------ */
+.mmm-spotify-card-idle {
+    border-color: rgba(255, 255, 255, 0.1);
+    opacity: 0.8;
+}
+
+.mmm-spotify-album-art-idle {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.mmm-spotify-title-idle {
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+.mmm-spotify-artist-idle {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.mmm-spotify-progress-bar-idle {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.mmm-spotify-logo-idle {
+    filter: grayscale(100%) opacity(0.5);
+}
