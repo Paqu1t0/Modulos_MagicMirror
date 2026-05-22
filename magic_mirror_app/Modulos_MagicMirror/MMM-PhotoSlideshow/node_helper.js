@@ -13,15 +13,30 @@ const path = require("path");
 module.exports = NodeHelper.create({
     start: function () {
         console.log("MMM-PhotoSlideshow: node_helper v2 iniciado.");
+        this.photoDir = null;
+        this.lastFilesStr = null;
+        this.watcher = null;
     },
 
     socketNotificationReceived: function (notification, payload) {
         if (notification === "GET_PHOTOS") {
-            this._loadPhotos(payload.photoDir);
+            // Ignorar a pasta do payload porque utilizadores antigos podem ter caminhos errados no config.js
+            this.photoDir = path.resolve(__dirname, "public/fotos");
+            this._loadPhotos();
+            
+            // Iniciar verificação automática a cada 10 segundos
+            if (!this.watcher) {
+                this.watcher = setInterval(() => {
+                    this._loadPhotos();
+                }, 10000);
+            }
         }
     },
 
-    _loadPhotos: function (photoDir) {
+    _loadPhotos: function () {
+        if (!this.photoDir) return;
+        const photoDir = this.photoDir;
+
         const SUPPORTED = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"];
         const MIME_MAP = {
             ".jpg": "image/jpeg",
@@ -34,16 +49,32 @@ module.exports = NodeHelper.create({
 
         try {
             if (!fs.existsSync(photoDir)) {
-                this.sendSocketNotification("PHOTOS_ERROR", {
-                    error: "Pasta não encontrada: " + photoDir,
-                });
-                return;
+                try {
+                    fs.mkdirSync(photoDir, { recursive: true });
+                    console.log("MMM-PhotoSlideshow: Pasta criada automaticamente em " + photoDir);
+                } catch (e) {
+                    if (this.lastFilesStr !== "ERROR_DIR") {
+                        this.lastFilesStr = "ERROR_DIR";
+                        this.sendSocketNotification("PHOTOS_ERROR", {
+                            error: "Não foi possível criar a pasta: " + photoDir,
+                        });
+                    }
+                    return;
+                }
             }
 
             const files = fs.readdirSync(photoDir).filter((f) => {
                 const ext = path.extname(f).toLowerCase();
                 return SUPPORTED.includes(ext);
             });
+
+            const currentFilesStr = files.sort().join(",");
+            
+            // Se a lista de ficheiros for igual à última vez, não fazemos reload para poupar o CPU do Raspberry Pi
+            if (this.lastFilesStr === currentFilesStr) {
+                return;
+            }
+            this.lastFilesStr = currentFilesStr;
 
             if (files.length === 0) {
                 this.sendSocketNotification("PHOTOS_ERROR", {
@@ -57,26 +88,21 @@ module.exports = NodeHelper.create({
 
             const photos = [];
             for (const filename of shuffled) {
-                try {
-                    const fullPath = path.join(photoDir, filename);
-                    const ext = path.extname(filename).toLowerCase();
-                    const mime = MIME_MAP[ext] || "image/jpeg";
-                    const data = fs.readFileSync(fullPath);
-                    const base64 = data.toString("base64");
-                    photos.push({
-                        name: path.basename(filename, ext),
-                        // Data URI: funciona diretamente como src de qualquer <img>
-                        url: `data:${mime};base64,${base64}`,
-                    });
-                } catch (readErr) {
-                    console.warn("MMM-PhotoSlideshow: Não foi possível ler " + filename + " — " + readErr.message);
-                }
+                photos.push({
+                    name: path.basename(filename, path.extname(filename)),
+                    // Enviar apenas o caminho relativo para o browser
+                    // O MagicMirror serve a pasta modules nativamente.
+                    url: `modules/MMM-PhotoSlideshow/public/fotos/${filename}?t=${Date.now()}`,
+                });
             }
 
             this.sendSocketNotification("PHOTOS_LIST", { photos });
             console.log("MMM-PhotoSlideshow: " + photos.length + " foto(s) carregada(s) de " + photoDir);
         } catch (err) {
-            this.sendSocketNotification("PHOTOS_ERROR", { error: err.message });
+            if (this.lastFilesStr !== "ERROR_GENERAL") {
+                this.lastFilesStr = "ERROR_GENERAL";
+                this.sendSocketNotification("PHOTOS_ERROR", { error: err.message });
+            }
         }
     },
 });

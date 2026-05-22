@@ -25,3 +25,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - Modulos_MagicMirror/MMM-BolsaTicker/
+    - Modulos_MagicMirror/MMM-BusCPT/
+    - Modulos_MagicMirror/MMM-GasPrices/
+    - Modulos_MagicMirror/MMM-GestorPaginas/
+    - Modulos_MagicMirror/MMM-GoogleCalendar/
+    - Modulos_MagicMirror/MMM-PhotoSlideshow/
+    - Modulos_MagicMirror/MMM-SpotifyNowPlaying/
+    - Modulos_MagicMirror/MMM-Ultrasonic/
+

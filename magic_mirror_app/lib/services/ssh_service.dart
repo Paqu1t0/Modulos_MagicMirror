@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/widget_model.dart';
 
 class SshService {
   static const String _prefKeyIp = 'mirror_ip';
@@ -913,17 +915,7 @@ try {
 
   Future<bool> _deployLocalModule(String moduleName) async {
     try {
-      // 1. Encontrar o diretório local do módulo
-      Directory localDir = Directory('Modulos_MagicMirror/$moduleName');
-      if (!localDir.existsSync()) {
-        localDir = Directory('magic_mirror_app/Modulos_MagicMirror/$moduleName');
-      }
-      if (!localDir.existsSync()) {
-        debugPrint('Diretório local do módulo $moduleName não encontrado.');
-        return false;
-      }
-
-      // 2. Conetar via SSH/SFTP
+      // 1. Conetar via SSH/SFTP
       final client = await _connect();
       final sftp = await client.sftp();
       final home = _user == 'pi' ? '/home/pi' : '/home/$_user';
@@ -932,40 +924,41 @@ try {
       // Criar a pasta do módulo no Pi
       await client.run('mkdir -p "$remoteDir"');
 
-      // 3. Listar ficheiros locais e fazer upload
-      final entities = localDir.listSync(recursive: true);
-      for (final entity in entities) {
-        if (entity is File) {
-          // Obter caminho relativo
-          final relativePath = entity.path
-              .replaceAll(localDir.path, '')
-              .replaceAll('\\', '/');
-          
-          // Limpar barra inicial se existir
-          final cleanRelativePath = relativePath.startsWith('/')
-              ? relativePath.substring(1)
-              : relativePath;
+      // 2. Ler os ficheiros do AssetManifest (suporta novas versões do Flutter)
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      
+      final prefix = 'Modulos_MagicMirror/$moduleName/';
+      final moduleFiles = manifest.listAssets().where((key) => key.startsWith(prefix)).toList();
 
-          if (cleanRelativePath.isEmpty) continue;
+      if (moduleFiles.isEmpty) {
+        debugPrint('Nenhum ficheiro encontrado nos assets para o módulo $moduleName');
+        client.close();
+        return false;
+      }
 
-          // Se estiver dentro de subpastas, criar pastas remotas correspondentes
-          final parts = cleanRelativePath.split('/');
-          if (parts.length > 1) {
-            final subfolder = parts.sublist(0, parts.length - 1).join('/');
-            await client.run('mkdir -p "$remoteDir/$subfolder"');
-          }
+      // 3. Upload dos ficheiros via SFTP
+      for (final assetPath in moduleFiles) {
+        final cleanRelativePath = assetPath.substring(prefix.length);
+        if (cleanRelativePath.isEmpty) continue;
 
-          final remoteFilePath = '$remoteDir/$cleanRelativePath';
-          final bytes = await entity.readAsBytes();
-          
-          debugPrint('A enviar $cleanRelativePath para $remoteFilePath...');
-          final file = await sftp.open(remoteFilePath,
-              mode: SftpFileOpenMode.create |
-                  SftpFileOpenMode.write |
-                  SftpFileOpenMode.truncate);
-          await file.writeBytes(bytes);
-          await file.close();
+        // Se estiver dentro de subpastas, criar pastas remotas correspondentes
+        final parts = cleanRelativePath.split('/');
+        if (parts.length > 1) {
+          final subfolder = parts.sublist(0, parts.length - 1).join('/');
+          await client.run('mkdir -p "$remoteDir/$subfolder"');
         }
+
+        final remoteFilePath = '$remoteDir/$cleanRelativePath';
+        final byteData = await rootBundle.load(assetPath);
+        final bytes = byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
+        
+        debugPrint('A enviar $cleanRelativePath para $remoteFilePath via SFTP...');
+        final file = await sftp.open(remoteFilePath,
+            mode: SftpFileOpenMode.create |
+                SftpFileOpenMode.write |
+                SftpFileOpenMode.truncate);
+        await file.writeBytes(bytes);
+        await file.close();
       }
 
       client.close();
@@ -985,17 +978,13 @@ try {
   }
 
   Future<bool> installModule(String repoUrl, String moduleName) async {
-    // 1. Tentar fazer deploy local se a pasta existir localmente
-    Directory localDir = Directory('Modulos_MagicMirror/$moduleName');
-    if (!localDir.existsSync()) {
-      localDir = Directory('magic_mirror_app/Modulos_MagicMirror/$moduleName');
-    }
-    if (localDir.existsSync()) {
+    // 1. Tentar fazer deploy local se for um módulo criado por nós (bundled na app)
+    if (ourModuleIds.contains(moduleName)) {
       debugPrint('Instalação local detetada para o módulo próprio: $moduleName');
       return _deployLocalModule(moduleName);
     }
 
-    // 2. Caso contrário, proceder com a instalação remota (git clone)
+    // 2. Caso contrário, proceder com a instalação remota do GitHub (git clone)
     final dir = '\$HOME/MagicMirror/modules/$moduleName';
     final check =
         await executeCommand('[ -d "$dir" ] && echo exists || echo notfound');
@@ -1109,5 +1098,40 @@ console.log(JSON.stringify({ ok: true, removed: blocksToRemove.length }));
     await executeCommand(
         '[ -f "$dir/package.json" ] && cd "$dir" && npm install --production 2>&1 || true');
     return true;
+  }
+
+  // ─── Gestão de Fotos (MMM-PhotoSlideshow) ────────────────────────────────
+
+  Future<List<String>> listPhotos(String remoteDir) async {
+    try {
+      final result = await executeCommand('ls -1 "$remoteDir" 2>/dev/null');
+      if (result != null && result.trim().isNotEmpty) {
+        final extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+        return result.split('\n')
+            .map((s) => s.trim())
+            .where((f) => extensions.any((ext) => f.toLowerCase().endsWith(ext)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Erro ao listar fotos em $remoteDir: $e');
+    }
+    return [];
+  }
+
+  Future<Uint8List?> getPhotoBytes(String remoteFilePath) async {
+    try {
+      final base64String = await executeCommand('base64 -w 0 "$remoteFilePath" 2>/dev/null');
+      if (base64String != null && base64String.trim().isNotEmpty) {
+        return base64Decode(base64String.trim());
+      }
+    } catch (e) {
+      debugPrint('Erro ao ler foto $remoteFilePath: $e');
+    }
+    return null;
+  }
+
+  Future<bool> deleteFile(String remoteFilePath) async {
+    final result = await executeCommand('rm -f "$remoteFilePath" && echo RM_OK');
+    return result != null && result.contains('RM_OK');
   }
 }

@@ -674,13 +674,18 @@ class _OursBadge extends StatelessWidget {
             color: Colors.white,
           ),
           const SizedBox(width: 3),
-          Text(
-            'Módulos Próprios',
-            style: TextStyle(
-              fontSize: compact ? 8 : 9,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: 0.2,
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Módulos Próprios',
+                style: TextStyle(
+                  fontSize: compact ? 8 : 9,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ),
         ],
@@ -752,24 +757,30 @@ class _CatalogueCard extends StatelessWidget {
                             size: 20,
                           ),
                         ),
-                        const Spacer(),
-                        if (module.isOurs)
-                          const _OursBadge(compact: true)
-                        else if (module.isInstalled)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppTheme.success.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text('Instalado',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.success,
-                                )),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: module.isOurs
+                                ? const _OursBadge(compact: true)
+                                : (module.isInstalled
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 7, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.success.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: const Text('Instalado',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppTheme.success,
+                                            )),
+                                      )
+                                    : const SizedBox()),
                           ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -824,14 +835,10 @@ class _CatalogueCard extends StatelessWidget {
               children: [
                 // Preview
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     onPressed: onPreview,
-                    icon: const Icon(Icons.visibility_outlined, size: 14),
-                    label: const Text('Ver',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                       side: BorderSide(
                         color: module.isOurs
                             ? const Color(0xFFFDE68A)
@@ -843,29 +850,57 @@ class _CatalogueCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.visibility_outlined, size: 14),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: const Text('Ver',
+                                style: TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 // Instalar
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     onPressed: module.isInstalled ? null : onInstall,
-                    icon: Icon(
-                      module.isInstalled ? Icons.check : Icons.download,
-                      size: 14,
-                    ),
-                    label: Text(
-                      module.isInstalled ? 'Inst.' : 'Instalar',
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                       backgroundColor: module.isOurs
                           ? const Color(0xFFD97706)
                           : null,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          module.isInstalled ? Icons.check : Icons.download,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              module.isInstalled ? 'Inst.' : 'Instalar',
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

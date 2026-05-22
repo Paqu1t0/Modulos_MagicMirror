@@ -133,7 +133,16 @@ class _WidgetDetailDialogState extends State<WidgetDetailDialog> {
 
   Future<void> _handleUpdate() async {
     setState(() { _loading = true; _actionLabel = 'A atualizar...'; });
-    final success = await MirrorApiService().updateModule(widget.widget.id);
+    
+    bool success;
+    if (widget.widget.isOurs) {
+      // Para os nossos módulos, "atualizar" significa re-enviar os ficheiros locais (assets)
+      success = await MirrorApiService().installModule(widget.widget.id);
+    } else {
+      // Para repositórios do GitHub, usamos o git pull
+      success = await MirrorApiService().updateModule(widget.widget.id);
+    }
+    
     if (!mounted) return;
     setState(() { _loading = false; _actionLabel = null; });
 

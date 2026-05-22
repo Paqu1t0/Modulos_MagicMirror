@@ -18,11 +18,13 @@
  */
 Module.register("MMM-PhotoSlideshow", {
     defaults: {
-        photoDir: "/home/pi/fotos",
+        photoDir: "/home/pi/MagicMirror/modules/MMM-PhotoSlideshow/public/fotos",
         interval: 10000,
         transitionEffect: "fade",
         overlayOpacity: 0.35,
         showCaption: false,
+        width: "300px",     // Largura padrão
+        height: "300px",    // Altura padrão
     },
 
     start: function () {
@@ -42,6 +44,8 @@ Module.register("MMM-PhotoSlideshow", {
     getDom: function () {
         const wrapper = document.createElement("div");
         wrapper.className = "mmm-photoslideshow-wrapper";
+        wrapper.style.maxWidth = this.config.width;
+        wrapper.style.maxHeight = this.config.height;
 
         if (!this.loaded) {
             const loading = document.createElement("div");
@@ -54,7 +58,7 @@ Module.register("MMM-PhotoSlideshow", {
         if (this.photos.length === 0) {
             const noPhotos = document.createElement("div");
             noPhotos.className = "mmm-photoslideshow-empty";
-            noPhotos.innerHTML = "📷 Nenhuma foto encontrada em:<br><code>" + this.config.photoDir + "</code>";
+            noPhotos.innerHTML = "📸<br>Carregue até 15 fotos<br>usando a App no telemóvel";
             wrapper.appendChild(noPhotos);
             return wrapper;
         }
